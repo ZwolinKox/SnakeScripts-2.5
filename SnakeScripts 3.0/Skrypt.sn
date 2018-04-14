@@ -1,0 +1,56 @@
+class Klasa
+{
+public:
+
+	default
+	{
+		zmienna = 25
+		field = 300
+	}
+		
+	init field |
+	
+	def metoda
+	{
+		yield
+		Write this.field
+	}
+	
+	def metoda2
+	{
+		
+	}
+	
+protected:
+	var field
+	
+protected:
+
+	var zmienna
+	
+};
+
+define variable = 50		
+define const bardzoStala 
+var zmienna = 50 			
+const stala = 30 			
+
+var zmienna = 20
+
+Object obj = Klasa 3
+Object obj2 = Klasa 999
+
+
+var[] tablica[20] = 33
+
+var[] ok[10] = 19
+var[] p[5] = 5
+
+ok[3] = 2
+
+obj.metoda()
+{
+	this.field = obj2.zmienna
+}
+
+
