@@ -1,0 +1,16 @@
+﻿„SnakeScripts 3.0.exe” (Win32): załadowano „C:\Users\Zwolin\source\repos\SnakeScripts 3.0\x64\Debug\SnakeScripts 3.0.exe”. Symbole zostały załadowane.
+„SnakeScripts 3.0.exe” (Win32): załadowano „C:\Windows\System32\ntdll.dll”. Nie można odnaleźć lub otworzyć pliku PDB.
+„SnakeScripts 3.0.exe” (Win32): załadowano „C:\Windows\System32\kernel32.dll”. Nie można odnaleźć lub otworzyć pliku PDB.
+„SnakeScripts 3.0.exe” (Win32): załadowano „C:\Windows\System32\KernelBase.dll”. Nie można odnaleźć lub otworzyć pliku PDB.
+„SnakeScripts 3.0.exe” (Win32): załadowano „C:\Windows\System32\vcruntime140d.dll”. Nie można odnaleźć lub otworzyć pliku PDB.
+„SnakeScripts 3.0.exe” (Win32): załadowano „C:\Windows\System32\ucrtbased.dll”. Nie można odnaleźć lub otworzyć pliku PDB.
+„SnakeScripts 3.0.exe” (Win32): załadowano „C:\Windows\System32\ucrtbased.dll”. Nie można odnaleźć lub otworzyć pliku PDB.
+„SnakeScripts 3.0.exe” (Win32): zwolniono „C:\Windows\System32\ucrtbased.dll”
+„SnakeScripts 3.0.exe” (Win32): załadowano „C:\Windows\System32\msvcp140d.dll”. Nie można odnaleźć lub otworzyć pliku PDB.
+„SnakeScripts 3.0.exe” (Win32): załadowano „C:\Windows\System32\kernel.appcore.dll”. Nie można odnaleźć lub otworzyć pliku PDB.
+„SnakeScripts 3.0.exe” (Win32): załadowano „C:\Windows\System32\msvcrt.dll”. Nie można odnaleźć lub otworzyć pliku PDB.
+„SnakeScripts 3.0.exe” (Win32): załadowano „C:\Windows\System32\rpcrt4.dll”. Nie można odnaleźć lub otworzyć pliku PDB.
+Wątek 0xcb4 zakończył działanie z kodem 0 (0x0).
+Wątek 0x1cbc zakończył działanie z kodem 0 (0x0).
+Wątek 0x5c4 zakończył działanie z kodem 0 (0x0).
+Program „[9008] SnakeScripts 3.0.exe” zakończył działanie z kodem 0 (0x0).

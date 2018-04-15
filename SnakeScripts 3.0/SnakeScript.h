@@ -6,6 +6,7 @@
 #include <fstream>
 #include <thread>
 #include <queue>
+#include <Windows.h>
 
 #define NOT_FOUND std::string::npos 
 #define POS_END std::string::npos
@@ -47,6 +48,7 @@ public:
 
 	enum ENCAPSULATION
 	{
+		ENCAPSULATION_UNKNOWN,
 		PRIVATE,
 		PROTECTED,
 		PUBLIC
@@ -56,19 +58,35 @@ public:
 	{
 		CMD_UNKNOWN,
 
+		CMD_CREATE_LOCAL_VAR,
 		CMD_ASSIGN_VALUE,
 		CMD_WRITE,
 		CMD_DEFPROC,
 		CMD_CALLPROC,
 		CMD_YIELD,
-		CMD_RBRACKER,
+		CMD_RBRACKET,
 		CMD_PRINT,
 		CMD_CREATE_VAR,
 		CMD_DELETE_VAR,
 		CMD_CREATE_OBJECT,
 		CMD_CREATE_ARRAY,
 		CMD_RUN_THREAD,
-		CMD_CALLMETHOD
+		CMD_CALLMETHOD,
+		CMD_IF,
+		CMD_ELSEIF,
+		CMD_ELSE,
+		CMD_SYSTEM,
+		CMD_READ,
+		CMD_WAIT,
+		CMD_RETURN,
+		CMD_FOR,
+		CMD_WHILE,
+		CMD_DOWHILE,
+		CMD_UNTIL,
+		CMD_DOUNTIL,
+		CMD_LOOP,
+		CMD_CONTINUE,
+		CMD_BREAK
 	};
 
 	//Struktury
@@ -114,6 +132,7 @@ public:
 		std::stack<VARIABLE> Arguments;
 		std::vector<COMMAND_INFO> Body;
 		std::vector<COMMAND_INFO> Yield;
+		int localVariables{ 0 };
 	};
 
 	struct THREAD
@@ -150,6 +169,7 @@ public:
 
 	std::vector<COMMAND_INFO> Commands;
 	std::vector<VARIABLE> Variables;
+	std::stack<VARIABLE> LocalVariables;
 	std::vector<std::vector<VARIABLE>> Arrays;
 	std::vector<CLASS> Classes;
 	std::vector<OBJECT> Objects;
@@ -169,6 +189,7 @@ public:
 	void ignore_line();
 	EOpType negate_operator(EOpType op);
 	VARIABLE get_local_variable(const string& sName, bool bChangeValue);
+	void set_local_variable(const string& sName, int value);
 	bool get_operator();
 	bool get_string();
 	bool get_brace();
@@ -178,7 +199,7 @@ public:
 	bool encrypt(const char *plikWyjsciowy, VARIABLE &var);
 	bool decrypt(const char * plikXorowany, VARIABLE &var);
 	bool get_word(string word);
-	bool get_color();
+	//bool get_color();
 	int get_object_id(string name);
 	int get_object_var_id(string name, string objectName);
 	int get_var_id(std::string varName);
@@ -186,8 +207,9 @@ public:
 	std::vector<string> get_init();
 	bool checkVarName(std::string varName);
 	bool checkArrayName(std::string arrayName);
+	bool get_logic_operator(int &operator_buff);
+	bool is_true(int nVarValue, EOpType OpType, int nValue);
 
-	
 	std::string get_script_name();
 	bool parse();
 	bool run();
@@ -352,6 +374,13 @@ public:
 					if (variable.name == name)
 						return variable.value;
 				}
+
+				SnakeScript::VARIABLE localVar;
+
+				localVar = memory.get_local_variable(name, false);
+
+				if (localVar.status != ENCAPSULATION_UNKNOWN)
+					return localVar.value;
 			}
 
 			throw Variable_not_found();

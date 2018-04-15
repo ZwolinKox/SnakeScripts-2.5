@@ -93,6 +93,54 @@ bool SnakeScript::get_token()
 	return true;
 }
 
+bool SnakeScript::get_logic_operator(int &operator_buff)
+{
+	int tmp_pos, tmp_pos2;
+	tmp_pos = bufor.find_first_not_of(WS_SET, pos);
+
+	if (tmp_pos == NOT_FOUND)
+	{
+		cword.clear();
+		pos = POS_END;
+		return false;
+	}
+
+	tmp_pos2 = bufor.find_first_of(WS_SET, tmp_pos);
+
+	if (tmp_pos2 == NOT_FOUND)
+	{
+		pos = bufor.length() - 1;
+		cword = bufor.substr(tmp_pos, bufor.length() - tmp_pos);
+
+	}
+	else
+	{
+		pos = tmp_pos2; cword = bufor.substr(tmp_pos, tmp_pos2 - tmp_pos);
+	}
+
+	if (cword == "==")
+		operator_buff = OP_EQUAL;
+
+	else if (cword == "!=")
+		operator_buff = OP_NOT_EQUAL;
+
+	else if (cword == "<")
+		operator_buff = OP_LESS;
+
+	else if (cword == ">")
+		operator_buff = OP_GREATER;
+
+	else if (cword == "<=")
+		operator_buff = OP_LESS_OR_EQUAL;
+
+	else if (cword == ">=")
+		operator_buff = OP_GREATER_OR_EQUAL;
+	else
+		return false;
+
+	return true;
+}
+
 bool SnakeScript::get_int()
 {
 	int tmp_pos, tmp_pos2;
@@ -485,6 +533,86 @@ SnakeScript::EOpType SnakeScript::negate_operator(EOpType op)
 
 }
 
+SnakeScript::VARIABLE SnakeScript::get_local_variable(const string& sName, bool bChangeValue)
+{
+	std::stack<VARIABLE> temp;
+	VARIABLE var;
+
+	bool bFound = false;
+
+	while (LocalVariables.size())
+	{
+		var = LocalVariables.top();
+		LocalVariables.pop();
+
+		if (var.name == sName)
+		{
+			bFound = true;
+
+			if (bChangeValue)
+				++var.value;
+		}
+
+		temp.push(var);
+
+		if (bFound)
+			break;
+	}
+
+	if (!bFound)
+	{
+		var.status = ENCAPSULATION_UNKNOWN;
+		var.value = -1;
+	}
+
+	while (temp.size())
+	{
+		LocalVariables.push(temp.top());
+		temp.pop();
+	}
+
+	return var;
+}
+
+void SnakeScript::set_local_variable(const string& sName, int value)
+{
+	std::stack<VARIABLE> temp;
+	VARIABLE var;
+
+	bool bFound = false;
+
+	while (LocalVariables.size())
+	{
+		var = LocalVariables.top();
+		LocalVariables.pop();
+
+		if (var.name == sName)
+		{
+			bFound = true;
+
+			var.value = value;
+		}
+
+		temp.push(var);
+
+		if (bFound)
+			break;
+	}
+
+	if (!bFound)
+	{
+		var.status = ENCAPSULATION_UNKNOWN;
+		var.value = -1;
+	}
+
+	while (temp.size())
+	{
+		LocalVariables.push(temp.top());
+		temp.pop();
+	}
+
+}
+
 bool SnakeScript::get_word(string word)
 {
 	int tmp_pos, tmp_pos2;
@@ -592,6 +720,21 @@ std::vector<string> SnakeScript::get_init()
 	return initVec;
 }
 
+bool SnakeScript::is_true(int nVarValue, EOpType OpType, int nValue)
+{
+	switch (OpType)
+	{
+	case OP_EQUAL: return (nVarValue == nValue);
+	case OP_NOT_EQUAL: return (nVarValue != nValue);
+	case OP_LESS: return (nVarValue < nValue);
+	case OP_GREATER: return (nVarValue > nValue);
+	case OP_LESS_OR_EQUAL: return (nVarValue <= nValue);
+	case OP_GREATER_OR_EQUAL: return (nVarValue >= nValue);
+	}
+
+	return false;
+}
+
 bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int start, int stop)
 {
 	static int isSwitch{ false };
@@ -604,7 +747,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 	static bool isLoop{ false };
 	static bool goBreak{ false };
 	static bool goContinue{ false };
-	static bool isIfTrue{ false };
+	//static bool isIfTrue{ false };
 
 	static bool isProc{ false };
 	static bool isProcButReturnAgain{ false };
@@ -614,6 +757,8 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 	//static int objectNumber;
 	static int procId;
 	static int methodId;
+	static bool lastIf{ false };
+	int numberOfLocalVar{ 0 };
 
 	for (int i = start; i <= stop; ++i)
 	{
@@ -638,9 +783,15 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 		switch (cmd_array[i].Type)
 		{
 		case CMD_ASSIGN_VALUE:
+		case CMD_READ:
 		{
 			auto dot = cmd_array[i].s1.find('.');
 			auto leftBracket = cmd_array[i].s1.find_first_of('[');
+
+			if (cmd_array[i].Type == CMD_READ)
+			{
+				std::getline(std::cin, cmd_array[i].s2);
+			}
 
 			Parser parser(cmd_array[i].s2);
 			Expression* expr = parser.parse_Expression();
@@ -751,17 +902,28 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 				if (varId < 0)
 				{
-					err_str = "Error! nie ma zmiennej " + cmd_array[i].s1;
-					return false;
-				}
+					VARIABLE localVar = get_local_variable(cmd_array[i].s1, false);
 
-				if (Variables[varId].isConst)
+					if (localVar.status == ENCAPSULATION_UNKNOWN)
+					{
+						err_str = "Error! nie ma zmiennej " + cmd_array[i].s1;
+						return false;
+					}
+
+					set_local_variable(cmd_array[i].s1, value);
+
+				}
+				else
 				{
-					err_str = "Error! Nie mozna zmienic wartosci stalej!";
-					return false;
+					if (Variables[varId].isConst)
+					{
+						err_str = "Error! Nie mozna zmienic wartosci stalej!";
+						return false;
+					}
+
+					Variables[varId].value = value;
 				}
 
-				Variables[varId].value = value;
 			}
 
 		}	break;
@@ -891,6 +1053,18 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 		}	break;
 
+		case CMD_CREATE_LOCAL_VAR:
+		{
+			VARIABLE var;
+
+			var.name = cmd_array[i].s1;
+			var.value = cmd_array[i].n1;
+
+			LocalVariables.push(var);
+			Procs[procId].localVariables++;
+
+		}	break;
+
 		case CMD_DELETE_VAR:
 		{
 			int varId = get_var_id(cmd_array[i].s1);
@@ -903,6 +1077,23 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 			Variables.erase(Variables.begin() + varId);
 		}	break;
+
+		case CMD_SYSTEM:
+		{
+			system(cmd_array[i].s1.c_str());
+		}	break;
+
+		case CMD_WAIT:
+		{
+			Parser parser{ cmd_array[i].s1 };
+			Expression* expr = parser.parse_Expression();
+
+			int value = expr->eval(*this);
+
+			Sleep(value);
+
+		}	break;
+		
 
 		case CMD_WRITE:
 		case CMD_PRINT:
@@ -1013,6 +1204,12 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 			}
 			else
 				execute_commands(Procs[procId].Body, 0, Procs[procId].Body.size() - 1);
+
+			while (Procs[procId].localVariables > 0)
+			{
+				LocalVariables.pop();
+				Procs[procId].localVariables--;
+			}
 
 			Procs[procId].Yield.clear();
 
@@ -1164,6 +1361,553 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 			}
 		}	break;
 
+		case CMD_ELSEIF:
+		case CMD_ELSE:
+		case CMD_IF:
+		{
+			int rbracket = -1, matching_if = -1;
+		
+			if (cmd_array[i].Type == CMD_ELSEIF)
+			{
+				for (int k = i; k != -1; k--)
+				{
+					if (cmd_array[k].Type == CMD_IF && cmd_array[k].nNestingLevel == cmd_array[k].nNestingLevel)
+					{
+						matching_if = k;
+						break;
+					}
+
+				} //for(int j 
+
+				if (matching_if < 0)
+				{
+					err_str = "Error! Else if bez pasujacego ifa'!";
+					return false;
+				}
+			}
+
+			else if (cmd_array[i].Type == CMD_ELSE)
+			{
+				for (int k = i; k != -1; k--)
+				{
+
+					if (cmd_array[k].Type == CMD_IF || (cmd_array[k].Type == CMD_ELSEIF && !lastIf) && cmd_array[k].nNestingLevel == cmd_array[k].nNestingLevel)
+					{
+						matching_if = k;
+						break;
+					}
+				}
+
+				if (matching_if < 0)
+				{
+					err_str = "Error! Else bez odpowiedniego if'a!";
+					return false;
+				}
+
+				cmd_array[i] = cmd_array[matching_if];
+				cmd_array[i].Type = CMD_ELSE;
+				cmd_array[i].n2 = negate_operator((EOpType)cmd_array[matching_if].n2); //"odwrócenie" warunku 
+
+			} //if(cmd_array[i].Type 
+
+			for (int j = i + 1; j <= stop; ++j)
+			{
+				if (cmd_array[j].Type == CMD_RBRACKET && cmd_array[j].nNestingLevel == cmd_array[i].nNestingLevel)
+				{
+					rbracket = j;
+					break;
+				}
+			}
+
+			if (rbracket < 0)
+			{
+				err_str = "Error! Niedomkniety blok if!";
+				return false;
+			}
+
+			Parser leftParser{ cmd_array[i].s1 };
+			Parser rightParser{ cmd_array[i].s2 };
+
+			Expression* expr = leftParser.parse_Expression();
+
+			int leftValue = expr->eval(*this);
+
+			expr = rightParser.parse_Expression();
+
+			int rightValue = expr->eval(*this);
+
+			if (cmd_array[i].Type == CMD_ELSEIF && !lastIf)
+			{
+				if (is_true(leftValue, (EOpType)cmd_array[i].n2, rightValue))
+				{
+					if (!execute_commands(cmd_array, i + 1, rbracket - 1))
+					{
+						err_str += "Blad w bloku if!";
+						return false;
+					}
+				} // if(is_true...
+
+			}
+
+			if (cmd_array[i].Type != CMD_ELSEIF)
+			{
+				if (is_true(leftValue, (EOpType)cmd_array[i].n2, rightValue))
+				{
+					if (cmd_array[i].Type == CMD_IF)
+						lastIf = true;
+
+					if (!execute_commands(cmd_array, i + 1, rbracket - 1))
+					{
+						err_str += "Blad w bloku if!";
+						return false;
+					}
+				} // if(is_true...
+				else if(cmd_array[i].Type == CMD_IF)
+					lastIf = false;
+			}
+
+
+			i = rbracket;
+
+		}	break;
+
+		case CMD_FOR:
+		{
+			int rbracket = -1;
+
+			for (int j = i + 1; j<cmd_array.size(); ++j) //szukanie prawej klamry 
+			{
+				if (cmd_array[j].Type == CMD_RBRACKET && cmd_array[j].nNestingLevel == cmd_array[i].nNestingLevel)
+				{
+					rbracket = j;
+					break;
+				}
+			}
+
+			if (rbracket < 0)
+			{
+				err_str = "Error! Niedomkniety blok for!";
+				return false;
+			} //wykonanie pêtli 
+
+				//++nNestingLevel;
+				VARIABLE counter;
+				counter.name = cmd_array[i].s1;
+				counter.value = cmd_array[i].n1;
+				LocalVariables.push(counter);
+				for (int k = cmd_array[i].n1; k <= cmd_array[i].n2; ++k)
+				{
+					isLoop = true;
+
+					if (goBreak)
+					{
+						goBreak = false;
+						isLoop = false;
+						isBreak = false;
+						break;
+					}
+
+					if (goContinue)
+					{
+						isContinue = false;
+						goContinue = false;
+						continue;
+					}
+
+					if (!execute_commands(cmd_array, i + 1, rbracket))
+						return false;
+
+					get_local_variable(cmd_array[i].s1, true); //zwiêksz licznik pêtli 
+				} // for(int k 
+
+				LocalVariables.pop();
+				i = rbracket;
+				isLoop = false;
+			} break;
+
+		case CMD_BREAK:
+		{
+			if (isLoop)
+				isBreak = true;
+		}	break;
+
+		case CMD_CONTINUE:
+		{
+			if (isLoop)
+				isContinue = true;
+		}	break;
+
+		case CMD_DOWHILE:
+		case CMD_WHILE:
+		{
+			int rbracket = -1;
+
+			for (int j = i + 1; j<cmd_array.size(); ++j) //szukanie prawej klamry 
+			{
+				if (cmd_array[j].Type == CMD_RBRACKET && cmd_array[j].nNestingLevel == cmd_array[i].nNestingLevel)
+				{
+					rbracket = j;
+					break;
+				}
+			}
+
+			if (rbracket < 0)
+			{
+				err_str = "Error! Niedomkniety blok while!";
+				return false;
+			} //wykonanie pêtli
+
+			int leftValue = 1;
+			int rightValue = 1;
+
+			Expression* expr;
+
+			if (!cmd_array[i].isWhileTrue)
+			{
+				Parser leftParser{ cmd_array[i].s1 };
+				Parser rightParser{ cmd_array[i].s2 };
+
+				expr = leftParser.parse_Expression();
+
+				leftValue = expr->eval(*this);
+
+				expr = rightParser.parse_Expression();
+
+				rightValue = expr->eval(*this);
+			}
+
+			if (cmd_array[i].Type == CMD_DOWHILE)
+			{
+				bool isFirstIt{ true };
+
+				while (true)
+				{
+					bool isBreakGeneralLoop{ false };
+
+					if (!isFirstIt)
+					{
+						if (!is_true(leftValue, (EOpType)cmd_array[i].n2, rightValue))
+						{
+							goBreak = false;
+							isLoop = false;
+							isBreak = false;
+							isBreakGeneralLoop = true;
+							break;
+						}
+					}
+
+					isFirstIt = false;
+
+					isLoop = true;
+
+					if (goBreak)
+					{
+						goBreak = false;
+						isLoop = false;
+						isBreak = false;
+						isBreakGeneralLoop = true;
+						break;
+					}
+
+					if (goContinue)
+					{
+						isContinue = false;
+						goContinue = false;
+						continue;
+					}
+
+					if (!execute_commands(cmd_array, i + 1, rbracket))
+						return false;
+
+					if (!cmd_array[i].isWhileTrue)
+					{
+						Parser leftParser{ cmd_array[i].s1 };
+						Parser rightParser{ cmd_array[i].s2 };
+
+						expr = leftParser.parse_Expression();
+
+						leftValue = expr->eval(*this);
+
+						expr = rightParser.parse_Expression();
+
+						rightValue = expr->eval(*this);
+					}
+
+
+				} // while
+			}
+			else
+			{
+				while (true)
+				{
+					bool isBreakGeneralLoop{ false };
+			
+					if (!is_true(leftValue, (EOpType)cmd_array[i].n2, rightValue))
+					{
+						goBreak = false;
+						isLoop = false;
+						isBreak = false;
+						isBreakGeneralLoop = true;
+						break;
+					}
+
+					isLoop = true;
+
+					if (goBreak)
+					{
+						goBreak = false;
+						isLoop = false;
+						isBreak = false;
+						isBreakGeneralLoop = true;
+						break;
+					}
+
+					if (goContinue)
+					{
+						isContinue = false;
+						goContinue = false;
+						continue;
+					}
+
+					if (!execute_commands(cmd_array, i + 1, rbracket))
+						return false;
+
+					if (!cmd_array[i].isWhileTrue)
+					{
+						Parser leftParser{ cmd_array[i].s1 };
+						Parser rightParser{ cmd_array[i].s2 };
+
+						expr = leftParser.parse_Expression();
+
+						leftValue = expr->eval(*this);
+
+						expr = rightParser.parse_Expression();
+
+						rightValue = expr->eval(*this);
+					}
+
+				} // while
+			}
+
+
+			i = rbracket;
+			isLoop = false;
+
+		} break;
+
+		case CMD_DOUNTIL:
+		case CMD_UNTIL:
+		{
+			int rbracket = -1;
+
+			for (int j = i + 1; j<cmd_array.size(); ++j) //szukanie prawej klamry 
+			{
+				if (cmd_array[j].Type == CMD_RBRACKET && cmd_array[j].nNestingLevel == cmd_array[i].nNestingLevel)
+				{
+					rbracket = j;
+					break;
+				}
+			}
+
+			if (rbracket < 0)
+			{
+				err_str = "Error! Niedomkniety blok until!";
+				return false;
+			} //wykonanie pêtli
+
+			int leftValue = 1;
+			int rightValue = 1;
+
+			Expression* expr;
+
+			if (!cmd_array[i].isWhileTrue)
+			{
+				Parser leftParser{ cmd_array[i].s1 };
+				Parser rightParser{ cmd_array[i].s2 };
+
+				expr = leftParser.parse_Expression();
+
+				leftValue = expr->eval(*this);
+
+				expr = rightParser.parse_Expression();
+
+				rightValue = expr->eval(*this);
+			}
+
+			if (cmd_array[i].Type == CMD_DOUNTIL)
+			{
+				bool isFirstIt{ true };
+
+				while (true)
+				{
+					bool isBreakGeneralLoop{ false };
+
+					if (!isFirstIt)
+					{
+						if (is_true(leftValue, (EOpType)cmd_array[i].n2, rightValue))
+						{
+							goBreak = false;
+							isLoop = false;
+							isBreak = false;
+							isBreakGeneralLoop = true;
+							break;
+						}
+					}
+
+					isFirstIt = false;
+
+					isLoop = true;
+
+					if (goBreak)
+					{
+						goBreak = false;
+						isLoop = false;
+						isBreak = false;
+						isBreakGeneralLoop = true;
+						break;
+					}
+
+					if (goContinue)
+					{
+						isContinue = false;
+						goContinue = false;
+						continue;
+					}
+
+					if (!execute_commands(cmd_array, i + 1, rbracket))
+						return false;
+
+					if (!cmd_array[i].isWhileTrue)
+					{
+						Parser leftParser{ cmd_array[i].s1 };
+						Parser rightParser{ cmd_array[i].s2 };
+
+						expr = leftParser.parse_Expression();
+
+						leftValue = expr->eval(*this);
+
+						expr = rightParser.parse_Expression();
+
+						rightValue = expr->eval(*this);
+					}
+
+
+				} // while
+			}
+			else
+			{
+				while (true)
+				{
+					bool isBreakGeneralLoop{ false };
+			
+					if (is_true(leftValue, (EOpType)cmd_array[i].n2, rightValue))
+					{
+						goBreak = false;
+						isLoop = false;
+						isBreak = false;
+						isBreakGeneralLoop = true;
+						break;
+					}
+
+					isLoop = true;
+
+					if (goBreak)
+					{
+						goBreak = false;
+						isLoop = false;
+						isBreak = false;
+						isBreakGeneralLoop = true;
+						break;
+					}
+
+					if (goContinue)
+					{
+						isContinue = false;
+						goContinue = false;
+						continue;
+					}
+
+					if (!execute_commands(cmd_array, i + 1, rbracket))
+						return false;
+
+					if (!cmd_array[i].isWhileTrue)
+					{
+						Parser leftParser{ cmd_array[i].s1 };
+						Parser rightParser{ cmd_array[i].s2 };
+
+						expr = leftParser.parse_Expression();
+
+						leftValue = expr->eval(*this);
+
+						expr = rightParser.parse_Expression();
+
+						rightValue = expr->eval(*this);
+					}
+
+				} // while
+			}
+
+
+			i = rbracket;
+			isLoop = false;
+
+		} break;
+
+		case CMD_LOOP:
+		{
+			int rbracket = -1;
+
+			for (int j = i + 1; j<cmd_array.size(); ++j) //szukanie prawej klamry 
+			{
+				if (cmd_array[j].Type == CMD_RBRACKET && cmd_array[j].nNestingLevel == cmd_array[i].nNestingLevel)
+				{
+					rbracket = j;
+					break;
+				}
+			}
+
+			if (rbracket < 0)
+			{
+				err_str = "Error! Niedomkniety blok while!";
+				return false;
+			} //wykonanie pêtli
+
+			int loopValue;
+			int thisValue{ 0 };
+
+			Parser parser{ cmd_array[i].s1 };
+			Expression* expr = parser.parse_Expression();
+
+			loopValue = expr->eval(*this) - 1;
+
+			while (loopValue != thisValue)
+			{
+				isLoop = true;
+
+				if (goBreak)
+				{
+					goBreak = false;
+					isLoop = false;
+					isBreak = false;
+					break;
+				}
+
+				if (goContinue)
+				{
+					isContinue = false;
+					goContinue = false;
+					continue;
+				}
+
+				if (!execute_commands(cmd_array, i + 1, rbracket))
+					return false;
+
+				thisValue++;
+
+			} // while
+
+		}	break;
+
 		} // g³ówny switch 
 
 		//if (isProcButReturnAgain)
@@ -1171,7 +1915,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 	} // g³ówna pêtla for 
 
-	--nNestingLevel;
+	//--nNestingLevel;
 }
 
 bool SnakeScript::checkVarName(std::string varName)
@@ -1282,7 +2026,7 @@ bool SnakeScript::parse()
 	bool bNotCommand{ false }; //flaga 
 	static bool isMethod{ false };
 	bool isThread{ false };
-	bool isProc{ false };
+	static bool isProc{ false };
 	static bool isYield{ false };
 	int nCurNestingLevel = 0;
 
@@ -1291,7 +2035,7 @@ bool SnakeScript::parse()
 	static METHOD method_info;
 	static std::vector<COMMAND_INFO> yield_info;
 	THREAD thread_info;
-	PROC proc_info;
+	static PROC proc_info;
 
 	do
 	{
@@ -1805,6 +2549,8 @@ bool SnakeScript::parse()
 		{
 			cmd_info.Type = CMD_CREATE_VAR;
 
+			cmd_info.s3.clear();
+
 			if (cword == "const")
 				cmd_info.s3 = "CONST";
 
@@ -1835,6 +2581,64 @@ bool SnakeScript::parse()
 			}
 			else
 				cmd_info.n1 = 0;
+		}
+
+		else if (cword == "Wait")
+		{
+			cmd_info.Type = CMD_WAIT;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewany czas oczekiwania!";
+				return false;
+			}
+
+			cmd_info.s1 = cword;
+		}
+
+		else if (cword == "let")
+		{
+			cmd_info.Type = CMD_CREATE_LOCAL_VAR;
+
+			if (!isProc)
+			{
+				err_str = "Error! Zmienne lokalne moga byv umieszczanie jedynie w procedurach!";
+				return false;
+			}
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa zmiennej!";
+				return false;
+			}
+
+			cmd_info.s1 = cword;
+
+			if (get_word("="))
+			{
+				if (!get_int())
+				{
+					err_str = "Error! Spodziewana wartosc inicjalizacyjna!";
+					return false;
+				}
+
+				cmd_info.n1 = param;
+			}
+			else
+				cmd_info.n1 = 0;
+		}
+
+		else if (cword == "Read")
+		{
+			cmd_info.Type = CMD_READ;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa zmiennej!";
+				return false;
+			}
+
+			cmd_info.s1 = cword;
 		}
 
 		else if (cword == "var[]")
@@ -1913,10 +2717,29 @@ bool SnakeScript::parse()
 				return false;
 			}
 
-			cmd_info.nNestingLevel = nCurNestingLevel++;
-
 			isProc = true;
 
+			if (!parse())
+				return false;
+
+			Procs.push_back(proc_info);
+
+			proc_info.Body.clear();
+
+			isProc = false;
+		}
+
+		else if (cword == "system")
+		{
+			cmd_info.Type = CMD_SYSTEM;
+
+			if (!get_string())
+			{
+				err_str = "Error! Spodziewana wartosc w cudzyslowiach!";
+				return false;
+			}
+
+			cmd_info.s1 = cword;
 		}
 
 		else if (cword == "Write" || cword == "Print")
@@ -2000,25 +2823,27 @@ bool SnakeScript::parse()
 
 		}
 
+		else if (cword == "break")
+			cmd_info.Type = CMD_BREAK;
+
+		else if (cword == "continue")
+			cmd_info.Type = CMD_CONTINUE;
+
 		else if (cword == "}")
 		{
-			cmd_info.Type = CMD_RBRACKER;
+			cmd_info.Type = CMD_RBRACKET;
 
-			if (isMethod)
-			{
-				if (nCurNestingLevel == 0)
-					return true;
-			}
+			if (isMethod && nCurNestingLevel == 0)
+				return true;
 
-			if (isYield)
+			if (isYield && nCurNestingLevel == 0)
 			{
 				isYield = false;
 				return true;
 			}
-			if (isProc)
+			if (isProc && nCurNestingLevel == 0)
 			{
-				isProc = false;
-				Procs.push_back(proc_info);
+				return true;
 			}
 
 			if (isThread && nCurNestingLevel == 0)
@@ -2093,6 +2918,189 @@ bool SnakeScript::parse()
 			else
 			{
 				err_str = "Error! Brak modulu " + cword = "!";
+				return false;
+			}
+		}
+
+		else if (cword == "if")
+		{
+			cmd_info.Type = CMD_IF;
+
+			cmd_info.s1.clear();
+
+			while (!get_logic_operator(cmd_info.n2))
+			{
+				cmd_info.s1 += cword;
+			}
+
+			cmd_info.s2.clear();
+
+			while (get_token() && cword != "{")
+			{
+				cmd_info.s2 += cword;
+			}
+
+			cmd_info.nNestingLevel = ++nCurNestingLevel;
+		}
+
+		else if (cword == "else")
+		{
+			if (get_word("if"))
+			{
+				cmd_info.Type = CMD_ELSEIF;
+
+				cmd_info.s1.clear();
+
+				while (!get_logic_operator(cmd_info.n2))
+				{
+					cmd_info.s1 += cword;
+				}
+
+				cmd_info.s2.clear();
+
+				while (get_token() && cword != "{")
+				{
+					cmd_info.s2 += cword;
+				}
+
+				cmd_info.nNestingLevel = ++nCurNestingLevel;
+			}
+			else
+			{
+				cmd_info.Type = CMD_ELSE;
+
+				if (!get_word("{"))
+				{
+					err_str = "Error! Spodziewane '{'";
+					return false;
+				}
+
+				cmd_info.nNestingLevel = ++nCurNestingLevel;
+			}
+		}
+
+		else if (cword == "for")
+		{
+			cmd_info.Type = CMD_FOR;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa licznika petli!";
+				return false;
+			}
+
+			cmd_info.s1 = cword;
+
+			if (!get_word("="))
+			{
+				err_str = "Error, spodziewalem sie znaku \'=\'";
+				return false;
+			}
+			if (!get_param())
+			{
+				err_str = "Error! Spodziewana wartosc poczatkowa licznika!";
+				return false;
+			}
+
+			cmd_info.n1 = param;
+
+			if (!get_word("to"))
+			{
+				err_str = "Error! Spodziewane slowo 'to'";
+				return false;
+			}
+
+			if (!get_int())
+			{
+				err_str = "Error! Spodziewana ostateczna wartosc licznika petli!";
+				return false;
+			}
+
+			cmd_info.n2 = param;
+
+			if (cmd_info.n1 > cmd_info.n2 || cmd_info.n1 < 0 || cmd_info.n2 < 0)
+			{
+				err_str = "Error! Bledna wartosc licznika petli!";
+				return false;
+			}
+
+			if (!get_token() || cword != "{")
+			{
+				err_str = "Error! Spodziewane '{'";
+				return false;
+			}
+
+			cmd_info.nNestingLevel = ++nCurNestingLevel;
+		}
+
+		else if (cword == "while" || cword == "until" || cword == "do")
+		{
+			cmd_info.Type = CMD_WHILE;
+			cmd_info.isWhileTrue = false;
+
+			if (cword == "until")
+				cmd_info.Type = CMD_UNTIL;
+
+			if (cword == "do")
+			{
+				if (!get_token() && (cword != "until" || cword != "while"))
+				{
+					err_str = "Error! 'do' bez instrukcji 'while'!";
+					return false;
+				}
+
+				if (cword == "while")
+					cmd_info.Type = CMD_DOWHILE;
+				else
+					cmd_info.Type = CMD_DOUNTIL;
+			}
+
+			cmd_info.s1.clear();
+
+			if (!get_word("true"))
+			{
+				while (!get_logic_operator(cmd_info.n2))
+				{
+					cmd_info.s1 += cword;
+				}
+
+				cmd_info.s2.clear();
+
+				while (get_token() && cword != "{")
+				{
+					cmd_info.s2 += cword;
+				}
+			}
+			else
+			{
+				cmd_info.isWhileTrue = true;
+				cmd_info.n2 = OP_EQUAL;
+
+				if (!get_word("{"))
+				{
+					err_str = "Error! Spodziewane '{'";
+					return false;
+				}
+			}
+				
+			
+		}
+
+		else if (cword == "loop")
+		{
+			cmd_info.Type = CMD_LOOP;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewano sie wartosci ile razy powtorzy sie petla!";
+				return false;
+			}
+
+			cmd_info.s1 = cword;
+
+			if (!get_word("{"))
+			{
+				err_str = "Error! Spodziewane '{'";
 				return false;
 			}
 		}

@@ -33,24 +33,46 @@ protected:
 define variable = 50		
 define const bardzoStala 
 var zmienna = 50 			
-const stala = 30 			
+const stala = 30 		
+
+
+def procedurka
+{
+	let zmiennaLokalna 
+	let drugaLokalna 
+
+	Write zmiennaLokalna
+	Write drugaLokalna
+}	
 
 var zmienna = 20
 
 Object obj = Klasa 3
 Object obj2 = Klasa 999
 
-
 var[] tablica[20] = 33
 
-var[] ok[10] = 19
+var[] ok[11] = 19
 var[] p[5] = 5
 
-ok[3] = 2
-
-obj.metoda()
+loop p[4]
 {
-	this.field = obj2.zmienna
+	Write "xd"
 }
+
+procedurka()
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
