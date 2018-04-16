@@ -44,7 +44,7 @@ bool SnakeScript::run()
 
 	if (!result)
 	{
-		cout << "error " << err_str << endl;
+		cout << err_str << endl;
 		system("pause > nul");
 		return false;
 	}
@@ -52,7 +52,7 @@ bool SnakeScript::run()
 	{
 		if (!execute_commands(Commands, 0, Commands.size() - 1))
 		{
-			cout << "error " << err_str << endl;
+			cout << err_str << endl;
 			system("pause > nul");
 			return false;
 		}
@@ -737,9 +737,6 @@ bool SnakeScript::is_true(int nVarValue, EOpType OpType, int nValue)
 
 bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int start, int stop)
 {
-	static int isSwitch{ false };
-	static int switchValue;
-
 	static int procNestingLvl;
 
 	static bool isBreak{ false };
@@ -747,22 +744,30 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 	static bool isLoop{ false };
 	static bool goBreak{ false };
 	static bool goContinue{ false };
-	//static bool isIfTrue{ false };
 
+	static bool isReturn{ false };
 	static bool isProc{ false };
-	static bool isProcButReturnAgain{ false };
 
-	static int nNestingLevel = 0, nNewPos = 0;
+	static int nNestingLevel = 0;
+
+	static int lastReturn{ 0 };
 
 	//static int objectNumber;
 	static int procId;
 	static int methodId;
 	static bool lastIf{ false };
-	int numberOfLocalVar{ 0 };
 
 	for (int i = start; i <= stop; ++i)
 	{
 	InsideLoop:
+
+		if (isReturn)
+		{
+			if (cmd_array[i-1].Type != CMD_CALLPROC)
+				return true;
+			else
+				isReturn = false;
+		}
 
 		if (isLoop)
 		{
@@ -1061,7 +1066,11 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 			var.value = cmd_array[i].n1;
 
 			LocalVariables.push(var);
-			Procs[procId].localVariables++;
+
+			if (isProc)
+				Procs[procId].localVariables++;
+			else if (isMethod)
+				Objects[objectNumber].Class.Methods[methodId].localVariables++;
 
 		}	break;
 
@@ -1094,7 +1103,6 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 		}	break;
 		
-
 		case CMD_WRITE:
 		case CMD_PRINT:
 		{
@@ -1174,6 +1182,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 		case CMD_CALLPROC:
 		{
+			int lastProc = procId;
 			procId = -1;
 
 			for (auto j = 0; j < Procs.size(); j++)
@@ -1202,8 +1211,39 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				execute_commands(Procs[procId].Body, 0, Procs[procId].Body.size() - 1);
 				isMethod = true;
 			}
-			else
+			else if (isProc)
+			{
+				std::stack<VARIABLE> temp;
+
+				while(Procs[lastProc].localVariables > 0)
+				{
+					temp.push(LocalVariables.top());
+					LocalVariables.pop();
+					Procs[lastProc].localVariables--;
+				}
+
 				execute_commands(Procs[procId].Body, 0, Procs[procId].Body.size() - 1);
+				Procs[procId].returnValue = lastReturn;
+
+				cout << Procs[procId].returnValue << endl;
+
+				system("pause > nul");
+
+				while (!temp.empty())
+				{
+					LocalVariables.push(temp.top());
+					temp.pop();
+					Procs[lastProc].localVariables++;
+				}
+
+			}
+			else
+			{
+				isProc = true;
+				execute_commands(Procs[procId].Body, 0, Procs[procId].Body.size() - 1);
+				Procs[procId].returnValue = lastReturn;
+				isProc = false;
+			}
 
 			while (Procs[procId].localVariables > 0)
 			{
@@ -1295,6 +1335,12 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 					return false;
 				}
 
+				while (Objects[objectNumber].Class.Methods[matchingMethod].localVariables > 0)
+				{
+					LocalVariables.pop();
+					Objects[objectNumber].Class.Methods[matchingMethod].localVariables--;
+				}
+
 				Objects[objectNumber].Class.Methods[matchingMethod].Yield.clear();
 			}
 			else
@@ -1355,6 +1401,12 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 					return false;
 				}
 
+				while (Objects[objectNumber].Class.Methods[matchingMethod].localVariables > 0)
+				{
+					LocalVariables.pop();
+					Objects[objectNumber].Class.Methods[matchingMethod].localVariables--;
+				}
+
 				Objects[objectNumber].Class.Methods[matchingMethod].Yield.clear();
 
 				isMethod = false;
@@ -1376,6 +1428,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 						matching_if = k;
 						break;
 					}
+
 
 				} //for(int j 
 
@@ -1440,12 +1493,14 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 			{
 				if (is_true(leftValue, (EOpType)cmd_array[i].n2, rightValue))
 				{
+
 					if (!execute_commands(cmd_array, i + 1, rbracket - 1))
 					{
 						err_str += "Blad w bloku if!";
 						return false;
 					}
-				} // if(is_true...
+				}
+
 
 			}
 
@@ -1465,7 +1520,6 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				else if(cmd_array[i].Type == CMD_IF)
 					lastIf = false;
 			}
-
 
 			i = rbracket;
 
@@ -1490,12 +1544,35 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				return false;
 			} //wykonanie pêtli 
 
+			Parser leftParser{ cmd_array[i].s2 };
+			Parser rightParser{ cmd_array[i].s3 };
+
+			Expression* expr = leftParser.parse_Expression();
+
+			VARIABLE counter;
+			counter.name = cmd_array[i].s1;
+
+			counter.value = expr->eval(*this);
+
+			if (counter.value < 0)
+			{
+				err_str = "Error! nieprawidlowa wartosc licznika petli!";
+				return false;
+			}
+
+			expr = rightParser.parse_Expression();
+
+			int finalValue = expr->eval(*this);
+
+			if (finalValue <= counter.value)
+			{
+				err_str = "Error! Ostateczna wartosc licznika petli nie moze byc <= od poczarkowej wartosci";
+				return false;
+			}
 				//++nNestingLevel;
-				VARIABLE counter;
-				counter.name = cmd_array[i].s1;
-				counter.value = cmd_array[i].n1;
+
 				LocalVariables.push(counter);
-				for (int k = cmd_array[i].n1; k <= cmd_array[i].n2; ++k)
+				for (int k = counter.value; k <= finalValue; ++k)
 				{
 					isLoop = true;
 
@@ -1868,7 +1945,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 			if (rbracket < 0)
 			{
-				err_str = "Error! Niedomkniety blok while!";
+				err_str = "Error! Niedomkniety blok loop!";
 				return false;
 			} //wykonanie pêtli
 
@@ -1879,6 +1956,12 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 			Expression* expr = parser.parse_Expression();
 
 			loopValue = expr->eval(*this) - 1;
+
+			if (loopValue < 0)
+			{
+				err_str = "Error! Petla loop nie moze wykonac sie mniej niz 1 raz!";
+				return false;
+			}
 
 			while (loopValue != thisValue)
 			{
@@ -1908,6 +1991,23 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 		}	break;
 
+		case CMD_RETURN:
+		{
+			isReturn = true;
+
+			Parser parser{ cmd_array[i].s1 };
+
+			Expression* expr = parser.parse_Expression();
+
+			lastReturn = expr->eval(*this);
+
+		}	break;
+
+		case CMD_UNKNOWN:
+		{
+			
+		}	break;
+
 		} // g³ówny switch 
 
 		//if (isProcButReturnAgain)
@@ -1916,6 +2016,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 	} // g³ówna pêtla for 
 
 	//--nNestingLevel;
+	lastReturn = 0;
 }
 
 bool SnakeScript::checkVarName(std::string varName)
@@ -2600,9 +2701,9 @@ bool SnakeScript::parse()
 		{
 			cmd_info.Type = CMD_CREATE_LOCAL_VAR;
 
-			if (!isProc)
+			if (!isProc && !isMethod)
 			{
-				err_str = "Error! Zmienne lokalne moga byv umieszczanie jedynie w procedurach!";
+				err_str = "Error! Zmienne lokalne moga byc umieszczanie jedynie w procedurach!";
 				return false;
 			}
 
@@ -2843,6 +2944,7 @@ bool SnakeScript::parse()
 			}
 			if (isProc && nCurNestingLevel == 0)
 			{
+				proc_info.Body.push_back(cmd_info);
 				return true;
 			}
 
@@ -2996,13 +3098,14 @@ bool SnakeScript::parse()
 				err_str = "Error, spodziewalem sie znaku \'=\'";
 				return false;
 			}
-			if (!get_param())
+
+			if (!get_token())
 			{
 				err_str = "Error! Spodziewana wartosc poczatkowa licznika!";
 				return false;
 			}
 
-			cmd_info.n1 = param;
+			cmd_info.s2 = cword;
 
 			if (!get_word("to"))
 			{
@@ -3010,19 +3113,13 @@ bool SnakeScript::parse()
 				return false;
 			}
 
-			if (!get_int())
+			if (!get_token())
 			{
 				err_str = "Error! Spodziewana ostateczna wartosc licznika petli!";
 				return false;
 			}
 
-			cmd_info.n2 = param;
-
-			if (cmd_info.n1 > cmd_info.n2 || cmd_info.n1 < 0 || cmd_info.n2 < 0)
-			{
-				err_str = "Error! Bledna wartosc licznika petli!";
-				return false;
-			}
+			cmd_info.s3 = cword;
 
 			if (!get_token() || cword != "{")
 			{
@@ -3103,6 +3200,22 @@ bool SnakeScript::parse()
 				err_str = "Error! Spodziewane '{'";
 				return false;
 			}
+		}
+
+		else if (cword == "return")
+		{
+			if (!isProc && !isMethod)
+			{
+				err_str = "Error! Nie mozna stosowac return poza metodami i procedurami!";
+				return false;
+			}
+
+			if (get_brace())
+				cmd_info.s1 = cword;
+			else
+				cmd_info.s1 = "0";
+
+			cmd_info.Type = CMD_RETURN;
 		}
 
 		else if ((isProc || isMethod) && cword == "yield")
@@ -3207,19 +3320,24 @@ bool SnakeScript::parse()
 
 
 				std::string lastChar;
-				while (get_token())
-				{
-					cmd_info.s2 += cword;
-
-					if (!get_math_operator())
-					{
-						break;
-					}
-
-					cmd_info.s2 += cword;
-
-				}
 				
+				if (!get_brace())
+				{
+					while (get_token())
+					{
+						cmd_info.s2 += cword;
+
+						if (!get_math_operator())
+						{
+							break;
+						}
+
+						cmd_info.s2 += cword;
+
+					}
+				}
+				else
+					cmd_info.s2 = cword;
 			}
 
 			if (notFound)
@@ -3298,6 +3416,10 @@ bool SnakeScript::Parser::whileParseVariable(char c)
 		return true;
 	if (c == '.')
 		return true;
+	if (c == '(')
+		return true;
+	if (c == ')')
+		return true;
 
 	return false;
 }
@@ -3333,7 +3455,7 @@ SnakeScript::Expression*  SnakeScript::Parser::parse_term()
 
 	if (isdigit(c))
 		return parse_Constant();
-	else if (isalpha(c) || c == '@')
+	else if (isalpha(c) || c == '|')
 		return parse_Variable();
 	else if (c == '(')
 		return parse_paren();

@@ -124,6 +124,7 @@ public:
 		std::stack<VARIABLE> Arguments;
 		std::vector<COMMAND_INFO> Body;
 		std::vector<COMMAND_INFO> Yield;
+		int localVariables{ 0 };
 	};
 
 	struct PROC
@@ -133,6 +134,7 @@ public:
 		std::vector<COMMAND_INFO> Body;
 		std::vector<COMMAND_INFO> Yield;
 		int localVariables{ 0 };
+		int returnValue{ 0 };
 	};
 
 	struct THREAD
@@ -283,16 +285,65 @@ public:
 		{
 			using namespace std;
 
+			auto isLength = name.find(".Length");
 			auto itr = name.find_first_of('[');
 			auto itrObj = name.find('.');
 			auto findThis = name.find("this");
+			auto lBracket = name.find("()");
 
-			if (itr != NOT_FOUND)
+			if (isLength != NOT_FOUND)
+			{
+				std::string arrayName = name.substr(0, isLength);
+
+				for (auto i = 0; i < memory.Arrays.size(); i++)
+				{
+					if (memory.Arrays[i][0].name == arrayName)
+						return memory.Arrays[i].size();
+				}
+			}
+
+			else if (lBracket != NOT_FOUND)
+			{
+				SnakeScript::COMMAND_INFO cmd_info;
+
+				std::string procName = name.substr(0, lBracket);
+
+				int procId = -1;
+
+				cmd_info.s1 = procName;
+				cmd_info.Type = CMD_CALLPROC;
+
+				for (auto i = 0; i < memory.Procs.size(); i++)
+				{
+					if (procName == memory.Procs[i].name)
+					{
+						procId = i;
+						break;
+					}
+				}
+
+				if (procId == -1)
+					throw Variable_not_found();
+
+				std::vector<COMMAND_INFO> cmd_array;
+
+				cmd_info.Type = CMD_UNKNOWN;
+				cmd_array.push_back(cmd_info);
+				cmd_info.Type = CMD_CALLPROC;
+				cmd_array.push_back(cmd_info);
+				cmd_info.Type = CMD_UNKNOWN;
+				cmd_array.push_back(cmd_info);
+
+				memory.execute_commands(cmd_array, 0, cmd_array.size()-1);
+
+				return memory.Procs[procId].returnValue;
+			}
+
+			else if (itr != NOT_FOUND)
 			{
 				std::string cword;
 				std::string number;
 
-				
 				auto rbracket = name.find_last_of(']');
 
 				auto lbracket = itr;
