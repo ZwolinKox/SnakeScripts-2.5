@@ -748,7 +748,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 	static bool isReturn{ false };
 	static bool isProc{ false };
 
-	static int nNestingLevel = 0;
+	//static int nNestingLevel = 0;
 
 	static int lastReturn{ 0 };
 
@@ -763,7 +763,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 		if (isReturn)
 		{
-			if (cmd_array[i-1].Type != CMD_CALLPROC)
+			if (cmd_array[i-1].Type != CMD_CALLPROC && cmd_array[i-1].Type != CMD_CALLMETHOD)
 				return true;
 			else
 				isReturn = false;
@@ -1027,7 +1027,10 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 						return false;
 					}
 
-					object.Class.Variables[matchingVar].value = cmd_array[i].initValues[j];
+					Parser parser{ cmd_array[i].initValues[j] };
+					Expression* expr = parser.parse_Expression();
+
+					object.Class.Variables[matchingVar].value = expr->eval(*this);
 				}
 
 
@@ -1085,6 +1088,52 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 			}
 
 			Variables.erase(Variables.begin() + varId);
+		}	break;
+
+		case CMD_DELETE_ARRAY:
+		{
+			int arrayId = -1;
+
+			for (auto j = 0; j < Arrays.size(); j++)
+			{
+				if (Arrays[j][0].name == cmd_array[i].s1)
+				{
+					arrayId = j;
+					break;
+				}
+			}
+				
+			if (arrayId < 0)
+			{
+				err_str = "Error! nie ma tablicy " + cmd_array[i].s1;
+				return false;
+			}
+
+			Arrays.erase(Arrays.begin() + arrayId);
+
+		}	break;
+
+		case CMD_DESTRUCT:
+		{
+			int objectId = -1;
+
+			for (auto j = 0; j < Objects.size(); j++)
+			{
+				if (Objects[j].objectName == cmd_array[i].s1)
+				{
+					objectId = j;
+					break;
+				}
+			}
+
+			if (objectId < 0)
+			{
+				err_str = "Error! nie ma obiektu " + cmd_array[i].s1;
+				return false;
+			}
+
+			Objects.erase(Objects.begin() + objectId);
+
 		}	break;
 
 		case CMD_SYSTEM:
@@ -1207,9 +1256,25 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 			if (isMethod)
 			{
+				std::stack<VARIABLE> temp;
+
+				while (Objects[objectNumber].Class.Methods[methodId].localVariables > 0)
+				{
+					temp.push(LocalVariables.top());
+					LocalVariables.pop();
+					Objects[objectNumber].Class.Methods[methodId].localVariables--;
+				}
+
 				isMethod = false;
 				execute_commands(Procs[procId].Body, 0, Procs[procId].Body.size() - 1);
 				isMethod = true;
+
+				while (!temp.empty())
+				{
+					LocalVariables.push(temp.top());
+					temp.pop();
+					Objects[objectNumber].Class.Methods[methodId].localVariables++;
+				}
 			}
 			else if (isProc)
 			{
@@ -1224,10 +1289,6 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 				execute_commands(Procs[procId].Body, 0, Procs[procId].Body.size() - 1);
 				Procs[procId].returnValue = lastReturn;
-
-				cout << Procs[procId].returnValue << endl;
-
-				system("pause > nul");
 
 				while (!temp.empty())
 				{
@@ -1322,7 +1383,18 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 					return false;
 				}
 
+				int lastMethod = methodId;
+
 				methodId = matchingMethod;
+
+				std::stack<VARIABLE> temp;
+
+				while (Objects[objectNumber].Class.Methods[lastMethod].localVariables > 0)
+				{
+					temp.push(LocalVariables.top());
+					LocalVariables.pop();
+					Objects[objectNumber].Class.Methods[lastMethod].localVariables--;
+				}
 
 				if (!cmd_array[i].yield_info.empty())
 				{
@@ -1335,6 +1407,8 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 					return false;
 				}
 
+				Objects[objectNumber].Class.Methods[matchingMethod].returnValue = lastReturn;
+
 				while (Objects[objectNumber].Class.Methods[matchingMethod].localVariables > 0)
 				{
 					LocalVariables.pop();
@@ -1342,6 +1416,13 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				}
 
 				Objects[objectNumber].Class.Methods[matchingMethod].Yield.clear();
+
+				while (!temp.empty())
+				{
+					LocalVariables.push(temp.top());
+					temp.pop();
+					Objects[objectNumber].Class.Methods[lastMethod].localVariables++;
+				}
 			}
 			else
 			{
@@ -1395,10 +1476,34 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 					Objects[objectNumber].Class.Methods[matchingMethod].Yield = cmd_array[i].yield_info;
 				}
 
+				std::stack<VARIABLE> temp;
+
+				if (isProc)
+				{
+					while (Procs[procId].localVariables > 0)
+					{
+						temp.push(LocalVariables.top());
+						LocalVariables.pop();
+						Procs[procId].localVariables--;
+					}
+				}
+
 				if (!execute_commands(Objects[objectNumber].Class.Methods[matchingMethod].Body, 0, Objects[objectNumber].Class.Methods[matchingMethod].Body.size() - 1))
 				{
 					err_str = "Error w metodzie " + Objects[objectNumber].Class.Methods[matchingMethod].name + " w obiekcie " + Objects[objectNumber].objectName + " klasy " + Objects[objectNumber].Class.name;
 					return false;
+				}
+
+				Objects[objectNumber].Class.Methods[matchingMethod].returnValue = lastReturn;
+
+				if (isProc)
+				{
+					while (!temp.empty())
+					{
+						LocalVariables.push(temp.top());
+						temp.pop();
+						Procs[procId].localVariables++;
+					}
 				}
 
 				while (Objects[objectNumber].Class.Methods[matchingMethod].localVariables > 0)
@@ -2003,9 +2108,106 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 		}	break;
 
+		case CMD_INSERT:
+		{
+			int arrayID = -1;
+
+			for (auto j = 0; j < Arrays.size(); j++)
+			{
+				if (Arrays[j][0].name == cmd_array[i].s1)
+				{
+					arrayID = j;
+					break;
+				}
+			}
+
+			if (arrayID < 0)
+			{
+				err_str = "Error! Nie ma tablicy " + cmd_array[i].s1;
+				return false;
+			}
+
+			Parser parser{ cmd_array[i].s2 };
+			Expression* expr = parser.parse_Expression();
+
+			VARIABLE var;
+			var.name = Arrays[arrayID][0].name;
+			var.value = expr->eval(*this);
+
+			Arrays[arrayID].push_back(var);
+
+		}	break;
+
+		case CMD_ERASE:
+		{
+			int arrayID = -1;
+
+			for (auto j = 0; j < Arrays.size(); j++)
+			{
+				if (Arrays[j][0].name == cmd_array[i].s1)
+				{
+					arrayID = j;
+					break;
+				}
+			}
+
+			if (arrayID < 0)
+			{
+				err_str = "Error! Nie ma tablicy " + cmd_array[i].s1;
+				return false;
+			}
+
+			Parser parser{ cmd_array[i].s2 };
+			Expression* expr = parser.parse_Expression();
+
+			int value = expr->eval(*this);
+
+			if (value >= Arrays[arrayID].size())
+				value = Arrays[arrayID].size() - 1;
+
+			Arrays[arrayID].erase(Arrays[arrayID].begin() + value);
+
+		}	break;
+
 		case CMD_UNKNOWN:
 		{
 			
+		}	break;
+
+		case CMD_ADD_NEW_METHOD:
+		{
+			int objectId = get_object_id(cmd_array[i].s2);
+
+			if (objectId < 0)
+			{
+				err_str = "Error! Nie ma obiektu " + cmd_array[i].s2;
+				return false;
+			}
+
+			for (auto j = 0; j < Objects[objectId].Class.Methods.size(); j++)
+			{
+				if (Objects[objectId].Class.Methods[j].name == cmd_array[i].s1)
+				{
+					Objects[objectId].Class.Methods.erase(Objects[objectId].Class.Methods.begin() + j);
+					break;
+				}
+			}
+
+			METHOD method;
+			method.className = "Dynamic";
+			method.status = PUBLIC;
+			method.name = cmd_array[i].s1;
+			method.Body = cmd_array[i].yield_info;
+
+			Objects[objectId].Class.Methods.push_back(method);
+
+		}	break;
+
+		case CMD_RBRACKET:
+		{
+			if (isMethod || isProc)
+				lastReturn = 0;
+
 		}	break;
 
 		} // g³ówny switch 
@@ -2015,8 +2217,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 	} // g³ówna pêtla for 
 
-	//--nNestingLevel;
-	lastReturn = 0;
+
 }
 
 bool SnakeScript::checkVarName(std::string varName)
@@ -2129,6 +2330,7 @@ bool SnakeScript::parse()
 	bool isThread{ false };
 	static bool isProc{ false };
 	static bool isYield{ false };
+	static bool isAdd{ false };
 	int nCurNestingLevel = 0;
 
 	COMMAND_INFO cmd_info = { CMD_UNKNOWN };
@@ -2794,6 +2996,74 @@ bool SnakeScript::parse()
 			cmd_info.s1 = cword;
 		}
 
+		else if (cword == "insert")
+		{
+			cmd_info.Type = CMD_INSERT;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa tablicy, do której chcesz dodac wartosc";
+				return false;
+			}
+
+			cmd_info.s1 = cword;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa wartosci dodawanej do tablicy";
+				return false;
+			}
+
+			cmd_info.s2 = cword;
+		}
+
+		else if (cword == "erase")
+		{
+			cmd_info.Type = CMD_ERASE;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa tablicy, do której chcesz dodac wartosc";
+				return false;
+			}
+
+			cmd_info.s1 = cword;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa wartosci dodawanej do tablicy";
+				return false;
+			}
+
+			cmd_info.s2 = cword;
+		}
+
+		else if (cword == "delete[]")
+		{
+			cmd_info.Type = CMD_DELETE_ARRAY;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa usuwanej tablicy!";
+				return false;
+			}
+
+			cmd_info.s1 = cword;
+		}
+
+		else if (cword == "destruct")
+		{
+			cmd_info.Type = CMD_DESTRUCT;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa niszczonego obiektu!";
+				return false;
+			}
+
+			cmd_info.s1 = cword;
+		}
+
 		else if (cword == "def")
 		{
 			cmd_info.Type = CMD_DEFPROC;
@@ -2912,13 +3182,13 @@ bool SnakeScript::parse()
 			{
 				for (short i = 0; i < Classes[classId].Init.size(); i++)
 				{
-					if (!get_int())
+					if (!get_token())
 					{
 						err_str = "Error! Spodziewana wartosc inicjalizacyjna!";
 						return false;
 					}
 
-					cmd_info.initValues.push_back(param);
+					cmd_info.initValues.push_back(cword);
 				}
 			}
 
@@ -2935,8 +3205,11 @@ bool SnakeScript::parse()
 			cmd_info.Type = CMD_RBRACKET;
 
 			if (isMethod && nCurNestingLevel == 0)
+			{
+				method_info.Body.push_back(cmd_info);
 				return true;
-
+			}
+				
 			if (isYield && nCurNestingLevel == 0)
 			{
 				isYield = false;
@@ -3204,7 +3477,7 @@ bool SnakeScript::parse()
 
 		else if (cword == "return")
 		{
-			if (!isProc && !isMethod)
+			if (!isProc && !isMethod && !isYield)
 			{
 				err_str = "Error! Nie mozna stosowac return poza metodami i procedurami!";
 				return false;
@@ -3218,7 +3491,69 @@ bool SnakeScript::parse()
 			cmd_info.Type = CMD_RETURN;
 		}
 
-		else if ((isProc || isMethod) && cword == "yield")
+		else if (cword == "add")
+		{
+
+			if (nCurNestingLevel != 0 || isProc || isMethod)
+			{
+				err_str = "Error! Dodawanie elementow nie moze odbywac sie w metodzie lub procedurze i nie moze byc zagniezdzone!";
+				return false;
+			}
+
+			if (!get_word("def"))
+			{
+				err_str = "Error! Spodziewano sie nazwy dodawanego elementu";
+				return false;
+			}
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa elementu!";
+				return false;
+			}
+
+			cmd_info.s1 = cword;
+
+			if (!get_word("to"))
+			{
+				err_str = "Error! Spodziewane slowo 'to'!";
+				return false;
+			}
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa obiektu!";
+				return false;
+			}
+
+			cmd_info.s2 = cword;
+
+
+			if (!get_word("{"))
+			{
+				err_str = "Error! Spodziewane '{'";
+				return false;
+			}
+
+			isYield = true;
+			isAdd = true;
+
+			if (!parse())
+				return false;
+
+
+			cmd_info.Type = CMD_RBRACKET;
+			yield_info.push_back(cmd_info);
+			cmd_info.Type = CMD_ADD_NEW_METHOD;
+
+			cmd_info.yield_info = yield_info;
+			yield_info.clear();
+
+			isYield = false;
+			isAdd = false;
+		}
+
+		else if ((isProc || isMethod || isAdd) && cword == "yield")
 			cmd_info.Type = CMD_YIELD;
 
 		//Wywolanie metody/procedury
@@ -3339,13 +3674,12 @@ bool SnakeScript::parse()
 				else
 					cmd_info.s2 = cword;
 			}
-
+			
 			if (notFound)
 			{
 				err_str = "Error! Nieznane polecenie " + error_string;
 				return false;
 			}
-
 		}
 
 	Push:
@@ -3419,6 +3753,8 @@ bool SnakeScript::Parser::whileParseVariable(char c)
 	if (c == '(')
 		return true;
 	if (c == ')')
+		return true;	
+	if (c == '_')
 		return true;
 
 	return false;

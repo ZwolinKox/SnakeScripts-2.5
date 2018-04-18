@@ -68,6 +68,8 @@ public:
 		CMD_PRINT,
 		CMD_CREATE_VAR,
 		CMD_DELETE_VAR,
+		CMD_DESTRUCT,
+		CMD_DELETE_ARRAY,
 		CMD_CREATE_OBJECT,
 		CMD_CREATE_ARRAY,
 		CMD_RUN_THREAD,
@@ -86,7 +88,10 @@ public:
 		CMD_DOUNTIL,
 		CMD_LOOP,
 		CMD_CONTINUE,
-		CMD_BREAK
+		CMD_BREAK,
+		CMD_INSERT,
+		CMD_ERASE,
+		CMD_ADD_NEW_METHOD
 	};
 
 	//Struktury
@@ -110,7 +115,7 @@ public:
 		int n1, n2, n3, n4, n5, n6, op, pow;
 		string s1, s2, s3, oper;
 		bool isWhileTrue{ false };
-		std::vector<int> initValues;
+		std::vector<std::string> initValues;
 		std::vector<COMMAND_INFO> yield_info;
 	};
 
@@ -125,6 +130,7 @@ public:
 		std::vector<COMMAND_INFO> Body;
 		std::vector<COMMAND_INFO> Yield;
 		int localVariables{ 0 };
+		var returnValue{ 0 };
 	};
 
 	struct PROC
@@ -134,7 +140,7 @@ public:
 		std::vector<COMMAND_INFO> Body;
 		std::vector<COMMAND_INFO> Yield;
 		int localVariables{ 0 };
-		int returnValue{ 0 };
+		var returnValue{ 0 };
 	};
 
 	struct THREAD
@@ -302,6 +308,84 @@ public:
 				}
 			}
 
+			else if (lBracket != NOT_FOUND && findThis != NOT_FOUND && itrObj != NOT_FOUND)
+			{
+				SnakeScript::COMMAND_INFO cmd_info;
+
+				std::string methodName = name.substr(itrObj+1, lBracket);
+				methodName.pop_back();
+				methodName.pop_back();
+
+				int methodId = -1;
+
+				cmd_info.s2 = methodName;
+
+				for (auto i = 0; i < memory.Objects[memory.objectNumber].Class.Methods.size(); i++)
+				{
+					if (methodName == memory.Objects[memory.objectNumber].Class.Methods[i].name)
+					{
+						methodId = i;
+						break;
+					}
+				}
+
+				if (methodId == -1)
+					throw Variable_not_found();
+
+				std::vector<COMMAND_INFO> cmd_array;
+
+				cmd_info.Type = CMD_UNKNOWN;
+				cmd_array.push_back(cmd_info);
+				cmd_info.Type = CMD_CALLMETHOD;
+				cmd_array.push_back(cmd_info);
+				cmd_info.Type = CMD_UNKNOWN;
+				cmd_array.push_back(cmd_info);
+
+				memory.execute_commands(cmd_array, 0, cmd_array.size() - 1);
+
+				return memory.Objects[memory.objectNumber].Class.Methods[methodId].returnValue;
+			}
+
+			else if (lBracket != NOT_FOUND && itrObj != NOT_FOUND)
+			{
+				SnakeScript::COMMAND_INFO cmd_info;
+
+				std::string methodName = name.substr(itrObj + 1, lBracket);
+				std::string objectName = name.substr(0, itrObj);
+				methodName.pop_back();
+				methodName.pop_back();
+
+				int methodId = -1;
+
+				cmd_info.s1 = objectName;
+				cmd_info.s2 = methodName;
+
+				for (auto i = 0; i < memory.Objects[memory.objectNumber].Class.Methods.size(); i++)
+				{
+					if (methodName == memory.Objects[memory.objectNumber].Class.Methods[i].name)
+					{
+						methodId = i;
+						break;
+					}
+				}
+
+				if (methodId == -1)
+					throw Variable_not_found();
+
+				std::vector<COMMAND_INFO> cmd_array;
+
+				cmd_info.Type = CMD_UNKNOWN;
+				cmd_array.push_back(cmd_info);
+				cmd_info.Type = CMD_CALLMETHOD;
+				cmd_array.push_back(cmd_info);
+				cmd_info.Type = CMD_UNKNOWN;
+				cmd_array.push_back(cmd_info);
+
+				memory.execute_commands(cmd_array, 0, cmd_array.size() - 1);
+
+				return memory.Objects[memory.objectNumber].Class.Methods[methodId].returnValue;
+			}
+
 			else if (lBracket != NOT_FOUND)
 			{
 				SnakeScript::COMMAND_INFO cmd_info;
@@ -424,6 +508,15 @@ public:
 				{
 					if (variable.name == name)
 						return variable.value;
+				}
+
+				if (memory.isMethod)
+				{
+					for (auto &variable : memory.Objects[memory.objectNumber].Class.Variables)
+					{
+						if (variable.name == name)
+							return variable.value;
+					}
 				}
 
 				SnakeScript::VARIABLE localVar;

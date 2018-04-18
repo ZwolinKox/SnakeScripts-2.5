@@ -1,44 +1,42 @@
 
-
 class Klaska
 {
 public:
 
 	def metoda
 	{
-		Write "XD"
-		yield
+		Write this.metoda2()
 	}
 	
-	def metoda2
+	def get_skladowa
 	{
-
+		return {skladowa} 
 	}
+	
+	init skladowa |
+	
+private:
+
+var skladowa
 
 };
 
-
-def inne
-{	
-	Write "XD"
-	Write "no ok"
-	return {1000} 
+def proc
+{
+	Write "Start"
+	yield
+	Write "End"
 }
 
+var zmienne = 99
 
-Object obj = Klaska
-
-obj.metoda2()
-
-var heh
-
-//heh = inne() 
-
-heh = {inne() * 200}
+Object obj2 = Klaska zmienne
 
 
-Write heh
+add def jakasMEtoda to obj2
+{
+	return {888}
+}
 
-
-
+obj2.op()
 
