@@ -1,42 +1,13 @@
+var zmienna = 10
 
-class Klaska
+zmienna = lambda { let lokalna = 77 return {lokalna} }
+
+var[] tab[4] = 99
+
+while true
 {
-public:
-
-	def metoda
-	{
-		Write this.metoda2()
-	}
-	
-	def get_skladowa
-	{
-		return {skladowa} 
-	}
-	
-	init skladowa |
-	
-private:
-
-var skladowa
-
-};
-
-def proc
-{
-	Write "Start"
-	yield
-	Write "End"
+	Write random(1000_1000)
 }
 
-var zmienne = 99
 
-Object obj2 = Klaska zmienne
-
-
-add def jakasMEtoda to obj2
-{
-	return {888}
-}
-
-obj2.op()
 

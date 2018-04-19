@@ -750,12 +750,13 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 	//static int nNestingLevel = 0;
 
-	static int lastReturn{ 0 };
-
 	//static int objectNumber;
 	static int procId;
 	static int methodId;
 	static bool lastIf{ false };
+	static bool isLambda{ false };
+	bool isLambaNoStatic{ false };
+	static int lambdaLocalVariables{ 0 };
 
 	for (int i = start; i <= stop; ++i)
 	{
@@ -763,7 +764,9 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 		if (isReturn)
 		{
-			if (cmd_array[i-1].Type != CMD_CALLPROC && cmd_array[i-1].Type != CMD_CALLMETHOD)
+			if (isLambaNoStatic)
+				isReturn = false;
+			else if (cmd_array[i-1].Type != CMD_CALLPROC && cmd_array[i-1].Type != CMD_CALLMETHOD)
 				return true;
 			else
 				isReturn = false;
@@ -798,138 +801,158 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				std::getline(std::cin, cmd_array[i].s2);
 			}
 
+			if (cmd_array[i].s3 == "LAMBDA")
+			{
+				isLambaNoStatic = true;
+				isLambda = true;
+
+				if (!execute_commands(cmd_array[i].yield_info, 0, cmd_array[i].yield_info.size() - 1))
+					return false;
+
+
+				while (lambdaLocalVariables != 0)
+				{
+					LocalVariables.pop();
+					lambdaLocalVariables--;
+				}
+
+				cmd_array[i].s2 = std::to_string(lastReturn);
+			}
+		
 			Parser parser(cmd_array[i].s2);
 			Expression* expr = parser.parse_Expression();
 
 			int value = expr->eval(*this);
-			
-			if (dot != NOT_FOUND)
-			{
-				std::string objectName = cmd_array[i].s1.substr(0, dot);
-				std::string varName = cmd_array[i].s1.substr(dot + 1);
-				int varId = -1;
-				int objectId = -1;
 
-
-				if (objectName != "this")
+				if (dot != NOT_FOUND)
 				{
-					for (auto j = 0; j < Objects.size(); j++)
+					std::string objectName = cmd_array[i].s1.substr(0, dot);
+					std::string varName = cmd_array[i].s1.substr(dot + 1);
+					int varId = -1;
+					int objectId = -1;
+
+
+					if (objectName != "this")
 					{
-						if (Objects[j].objectName == objectName)
+						for (auto j = 0; j < Objects.size(); j++)
 						{
-							objectId = j;
-							break;
+							if (Objects[j].objectName == objectName)
+							{
+								objectId = j;
+								break;
+							}
 						}
 					}
-				}
-				else
-				{
-					if (!isMethod)
+					else
 					{
-						err_str = "Error! Nie mozna stosowac 'this' poza klasa!";
-						return false;
-					}
-
-					objectId = objectNumber;
-				}
-					
-				if (objectId < 0)
-				{
-					err_str = "Error! Nie ma obiektu " + objectName;
-				}
-
-				for (auto j = 0; j < Objects[objectId].Class.Variables.size(); j++)
-				{
-					if (Objects[objectId].Class.Variables[j].name == varName)
-					{
-						if (Objects[objectId].Class.Variables[j].status != PUBLIC && objectName != "this")
+						if (!isMethod)
 						{
-							err_str = "Error! Zmienna " + varName + " w obiekcie " + objectName + " nie jest publiczna!";
+							err_str = "Error! Nie mozna stosowac 'this' poza klasa!";
 							return false;
 						}
 
-						varId = j;
-						break;
+						objectId = objectNumber;
 					}
-				}
 
-				if (varId < 0)
-				{
-					err_str = "Error! Nie ma zmiennej " + varName + " w obiekcie " + Objects[objectId].objectName;
-					return false;
-				}
-
-				Objects[objectId].Class.Variables[varId].value = value;
-			}
-
-			else if (leftBracket != NOT_FOUND)
-			{
-				auto rightBracket = cmd_array[i].s1.find_last_of(']');
-
-				if (rightBracket == NOT_FOUND)
-				{
-					err_str = "Error! Brak ''['";
-					return false;
-				}
-
-				int arrayId = -1;
-				std::string arrayName = cmd_array[i].s1.substr(0, leftBracket);
-
-				for (auto j = 0; j < Arrays.size(); j++)
-				{
-					if (Arrays[j][0].name == arrayName)
+					if (objectId < 0)
 					{
-						arrayId = j;
-						break;
+						err_str = "Error! Nie ma obiektu " + objectName;
 					}
-				}
 
-				if (arrayId < 0)
-				{
-					err_str = "Error! Nie ma tablicy " + arrayName;
-					return false;
-				}
-
-				std::string inArrayString = cmd_array[i].s1.substr(leftBracket+1);
-				inArrayString.pop_back();
-
-				Parser parser{ inArrayString };
-				Expression* expr = parser.parse_Expression();
-
-				int arrayIndex = expr->eval(*this);
-
-				Arrays[arrayId][arrayIndex].value = value;
-			}
-
-			else
-			{
-				int varId = get_var_id(cmd_array[i].s1);
-
-				if (varId < 0)
-				{
-					VARIABLE localVar = get_local_variable(cmd_array[i].s1, false);
-
-					if (localVar.status == ENCAPSULATION_UNKNOWN)
+					for (auto j = 0; j < Objects[objectId].Class.Variables.size(); j++)
 					{
-						err_str = "Error! nie ma zmiennej " + cmd_array[i].s1;
+						if (Objects[objectId].Class.Variables[j].name == varName)
+						{
+							if (Objects[objectId].Class.Variables[j].status != PUBLIC && objectName != "this")
+							{
+								err_str = "Error! Zmienna " + varName + " w obiekcie " + objectName + " nie jest publiczna!";
+								return false;
+							}
+
+							varId = j;
+							break;
+						}
+					}
+
+					if (varId < 0)
+					{
+						err_str = "Error! Nie ma zmiennej " + varName + " w obiekcie " + Objects[objectId].objectName;
 						return false;
 					}
 
-					set_local_variable(cmd_array[i].s1, value);
-
+					Objects[objectId].Class.Variables[varId].value = value;
 				}
+
+				else if (leftBracket != NOT_FOUND)
+				{
+					auto rightBracket = cmd_array[i].s1.find_last_of(']');
+
+					if (rightBracket == NOT_FOUND)
+					{
+						err_str = "Error! Brak ''['";
+						return false;
+					}
+
+					int arrayId = -1;
+					std::string arrayName = cmd_array[i].s1.substr(0, leftBracket);
+
+					for (auto j = 0; j < Arrays.size(); j++)
+					{
+						if (Arrays[j][0].name == arrayName)
+						{
+							arrayId = j;
+							break;
+						}
+					}
+
+					if (arrayId < 0)
+					{
+						err_str = "Error! Nie ma tablicy " + arrayName;
+						return false;
+					}
+
+					std::string inArrayString = cmd_array[i].s1.substr(leftBracket + 1);
+					inArrayString.pop_back();
+
+					Parser parser{ inArrayString };
+					Expression* expr = parser.parse_Expression();
+
+					int arrayIndex = expr->eval(*this);
+
+					Arrays[arrayId][arrayIndex].value = value;
+				}
+
 				else
 				{
-					if (Variables[varId].isConst)
+					int varId = get_var_id(cmd_array[i].s1);
+
+					if (varId < 0)
 					{
-						err_str = "Error! Nie mozna zmienic wartosci stalej!";
-						return false;
+						VARIABLE localVar = get_local_variable(cmd_array[i].s1, false);
+
+						if (localVar.status == ENCAPSULATION_UNKNOWN)
+						{
+							err_str = "Error! nie ma zmiennej " + cmd_array[i].s1;
+							return false;
+						}
+
+						set_local_variable(cmd_array[i].s1, value);
+
+					}
+					else
+					{
+						if (Variables[varId].isConst)
+						{
+							err_str = "Error! Nie mozna zmienic wartosci stalej!";
+							return false;
+						}
+
+						Variables[varId].value = value;
 					}
 
-					Variables[varId].value = value;
 				}
-
-			}
+			
+			
 
 		}	break;
 
@@ -1074,6 +1097,8 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				Procs[procId].localVariables++;
 			else if (isMethod)
 				Objects[objectNumber].Class.Methods[methodId].localVariables++;
+			else if (isLambda)
+				lambdaLocalVariables++;
 
 		}	break;
 
@@ -1526,14 +1551,18 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 		
 			if (cmd_array[i].Type == CMD_ELSEIF)
 			{
-				for (int k = i; k != -1; k--)
+				for (int k = i-1; k != -1; k--)
 				{
-					if (cmd_array[k].Type == CMD_IF && cmd_array[k].nNestingLevel == cmd_array[k].nNestingLevel)
+					if (cmd_array[k].Type == CMD_IF && cmd_array[k].nNestingLevel == cmd_array[i].nNestingLevel)
 					{
 						matching_if = k;
 						break;
 					}
-
+					else if (cmd_array[k].Type == CMD_ELSEIF || cmd_array[k].Type == CMD_ELSE && cmd_array[k].nNestingLevel == cmd_array[i].nNestingLevel)
+					{
+						err_str = "Error! W jednym bloku if - else if - else kazdy blok musi wystepowac maksymalnie raz";
+						return false;
+					}
 
 				} //for(int j 
 
@@ -1546,10 +1575,10 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 			else if (cmd_array[i].Type == CMD_ELSE)
 			{
-				for (int k = i; k != -1; k--)
+				for (int k = i-1; k != -1; k--)
 				{
 
-					if (cmd_array[k].Type == CMD_IF || (cmd_array[k].Type == CMD_ELSEIF && !lastIf) && cmd_array[k].nNestingLevel == cmd_array[k].nNestingLevel)
+					if (cmd_array[k].Type == CMD_IF || (cmd_array[k].Type == CMD_ELSEIF && !lastIf) && cmd_array[k].nNestingLevel == cmd_array[i].nNestingLevel)
 					{
 						matching_if = k;
 						break;
@@ -2169,6 +2198,38 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 		}	break;
 
+		case CMD_LAMBDA:
+		{
+			int rbracket = -1;
+
+			for (int j = i + 1; j<cmd_array.size(); ++j)
+			{
+				if (cmd_array[j].Type == CMD_RBRACKET && cmd_array[j].nNestingLevel == cmd_array[i].nNestingLevel)
+				{
+					rbracket = j;
+					break;
+				}
+			}
+
+			if (rbracket < 0)
+			{
+				err_str = "Error! Niedomkniete wyrazenie lambda!";
+				return false;
+			}
+
+			isLambda = true;
+			isLambaNoStatic = true;
+
+			if (!execute_commands(cmd_array, i + 1, rbracket))
+				return false;
+
+			isLambda = false;			
+			isLambaNoStatic = true;
+
+			i = rbracket;
+
+		}	break;
+
 		case CMD_UNKNOWN:
 		{
 			
@@ -2205,7 +2266,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 		case CMD_RBRACKET:
 		{
-			if (isMethod || isProc)
+			if (isMethod || isProc || isLambda)
 				lastReturn = 0;
 
 		}	break;
@@ -2332,6 +2393,7 @@ bool SnakeScript::parse()
 	static bool isYield{ false };
 	static bool isAdd{ false };
 	int nCurNestingLevel = 0;
+	bool isLambda{ false };
 
 	COMMAND_INFO cmd_info = { CMD_UNKNOWN };
 	//CLASS class_info;
@@ -2903,7 +2965,7 @@ bool SnakeScript::parse()
 		{
 			cmd_info.Type = CMD_CREATE_LOCAL_VAR;
 
-			if (!isProc && !isMethod)
+			if (!isProc && !isMethod && !isYield)
 			{
 				err_str = "Error! Zmienne lokalne moga byc umieszczanie jedynie w procedurach!";
 				return false;
@@ -3023,7 +3085,7 @@ bool SnakeScript::parse()
 
 			if (!get_token())
 			{
-				err_str = "Error! Spodziewana nazwa tablicy, do której chcesz dodac wartosc";
+				err_str = "Error! Spodziewana nazwa tablicy, z ktorej chcesz usunac wartosc";
 				return false;
 			}
 
@@ -3031,7 +3093,7 @@ bool SnakeScript::parse()
 
 			if (!get_token())
 			{
-				err_str = "Error! Spodziewana nazwa wartosci dodawanej do tablicy";
+				err_str = "Error! Spodziewany usuwany index tablicy!";
 				return false;
 			}
 
@@ -3221,6 +3283,9 @@ bool SnakeScript::parse()
 				return true;
 			}
 
+			if (isLambda && nCurNestingLevel == 1)
+				isLambda = false;
+
 			if (isThread && nCurNestingLevel == 0)
 			{
 				isThread = false;
@@ -3337,8 +3402,6 @@ bool SnakeScript::parse()
 				{
 					cmd_info.s2 += cword;
 				}
-
-				cmd_info.nNestingLevel = ++nCurNestingLevel;
 			}
 			else
 			{
@@ -3350,8 +3413,10 @@ bool SnakeScript::parse()
 					return false;
 				}
 
-				cmd_info.nNestingLevel = ++nCurNestingLevel;
 			}
+
+			cmd_info.nNestingLevel = ++nCurNestingLevel;
+
 		}
 
 		else if (cword == "for")
@@ -3453,7 +3518,7 @@ bool SnakeScript::parse()
 				}
 			}
 				
-			
+			cmd_info.nNestingLevel = ++nCurNestingLevel;
 		}
 
 		else if (cword == "loop")
@@ -3473,11 +3538,13 @@ bool SnakeScript::parse()
 				err_str = "Error! Spodziewane '{'";
 				return false;
 			}
+
+			cmd_info.nNestingLevel = ++nCurNestingLevel;
 		}
 
 		else if (cword == "return")
 		{
-			if (!isProc && !isMethod && !isYield)
+			if (!isProc && !isMethod && !isYield && !isLambda)
 			{
 				err_str = "Error! Nie mozna stosowac return poza metodami i procedurami!";
 				return false;
@@ -3551,6 +3618,26 @@ bool SnakeScript::parse()
 
 			isYield = false;
 			isAdd = false;
+		}
+
+		else if (cword == "lambda")
+		{
+			cmd_info.Type = CMD_LAMBDA;
+
+			if (nCurNestingLevel != 0)
+			{
+				err_str = "Error! Wyrazenie lambda nie moze byc zagniezdzone!";
+				return false;
+			}
+
+			if (!get_word("{"))
+			{
+				err_str = "Error! Spodziewane '{' przy wyrazeniu lambda!";
+				return false;
+			}
+
+			cmd_info.nNestingLevel = ++nCurNestingLevel;
+			isLambda = true;			
 		}
 
 		else if ((isProc || isMethod || isAdd) && cword == "yield")
@@ -3647,12 +3734,46 @@ bool SnakeScript::parse()
 
 			cmd_info.s1 = cword;
 
-			if (get_operator())
+			if (!get_operator())
+			{
+				err_str = "Error! Spodziewany operator!";
+				return false;
+			}
+
+			if (get_word("lambda"))
+			{
+				cmd_info.s2 = "0";
+				cmd_info.s3 = "LAMBDA";
+				notFound = false;
+
+				if (!get_word("{"))
+				{
+					err_str = "Error! Spodziewane '{'";
+					return false;
+				}
+
+				isYield = true;
+				//isLambda = true;
+
+				if (!parse())
+					return false;
+
+				cmd_info.Type = CMD_RBRACKET;
+				yield_info.push_back(cmd_info);
+				cmd_info.Type = CMD_ASSIGN_VALUE;
+				cmd_info.yield_info = yield_info;
+				yield_info.clear();
+
+				isYield = false;
+				//isLambda = false;
+			}
+
+			else
 			{
 				cmd_info.s2.clear();
+				cmd_info.s3 = "ASSIGN";
 				notFound = false;
 				cmd_info.Type = CMD_ASSIGN_VALUE;
-
 
 				std::string lastChar;
 				
