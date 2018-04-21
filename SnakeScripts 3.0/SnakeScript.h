@@ -7,6 +7,8 @@
 #include <thread>
 #include <queue>
 #include <Windows.h>
+#include <array>
+#include <functional>
 
 #define NOT_FOUND std::string::npos 
 #define POS_END std::string::npos
@@ -16,6 +18,8 @@ const char EOS = NULL;
 //Rzucane wyj¹tkis
 class Variable_not_found { };
 class Not_parsed { };
+class Array_Out_Of_Range {};
+class Private_Var {};
 
 using std::string;
 using std::cout;
@@ -92,7 +96,10 @@ public:
 		CMD_INSERT,//
 		CMD_ERASE,//
 		CMD_ADD_NEW_METHOD,//
-		CMD_LAMBDA //
+		CMD_LAMBDA, //
+		CMD_THROW,
+		CMD_TESTEQ,
+		CMD_ADD_STRING, 
 	};
 
 	//Struktury
@@ -106,6 +113,13 @@ public:
 		var value;
 		std::string name;
 		bool isConst{ false };
+		ENCAPSULATION status{ PUBLIC };
+	};
+
+	struct STRING :public Type
+	{
+		std::string value;
+		std::string name;
 		ENCAPSULATION status{ PUBLIC };
 	};
 
@@ -185,8 +199,14 @@ public:
 	std::vector<string> Libs;
 	std::vector<PROC> Procs;
 	std::vector<THREAD> Threads;
+	std::vector<STRING> Strings;
 
-	std::vector<COMMAND_INFO> LambdaInfo;
+	std::vector<std::function<void()>> CPP_FUNCTIONS;
+
+	std::array<std::string, 1> STD_LIBS
+	{
+		"Self.sl"
+	};
 
 	bool isMethod{ false };
 	int objectNumber;
@@ -221,6 +241,7 @@ public:
 	bool checkArrayName(std::string arrayName);
 	bool get_logic_operator(int &operator_buff);
 	bool is_true(int nVarValue, EOpType OpType, int nValue);
+	bool loadStdLibs();
 
 	std::string get_script_name();
 	bool parse();
@@ -230,8 +251,6 @@ public:
 public:
 
 	//Parser matematyczny
-	class Array_Out_Of_Range {};
-	class Private_Var {};
 
 	class Expression
 	{

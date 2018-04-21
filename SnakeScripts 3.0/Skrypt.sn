@@ -1,13 +1,24 @@
-var zmienna = 10
-
-zmienna = lambda { let lokalna = 77 return {lokalna} }
-
-var[] tab[4] = 99
-
-while true
+class Klasa
 {
-	Write random(1000_1000)
+public:
+
+
+
+};
+
+def proc
+{
+	let zmienna = 90
+	return {zmienna}
 }
 
+def procc
+{
+	return {61}
+}
+
+
+TEST_EQ ProcTest proc 90 //TEST ProcTest PASSED
+TEST_EQ InneProc procc 60 //TEST InneProc FAILED
 
 
