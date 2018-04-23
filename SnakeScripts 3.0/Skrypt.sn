@@ -1,12 +1,11 @@
 
-def procedurka (zmienna, zmiennaa, zmiennaaa) 
+def costam (x, y, z)
 {
-	Write zmienna
-	Write zmiennaa
-	Write zmiennaaa
+	Write "Xd"
+	Write x*y*z
 }
 
-procedurka(10, 20, 30)
-procedurka(40, 50, 60, 70)
+
+costam(10, 10)
 
 

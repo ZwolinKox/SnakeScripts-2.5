@@ -1439,7 +1439,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 			if (cmd_array[i].procArguments.size() != Procs[procId].Arguments.size())
 			{
-				err_str = "Error! Bledna liczba argumentow przy wywolaniu procedury: " + Procs[procId].name;
+				err_str = "Error! Bledna liczba argumentow przy wywolaniu procedury: " + Procs[procId].name + " " + std::to_string(cmd_array[i].procArguments.size()) + " / " + std::to_string(Procs[procId].Arguments.size());
 				return false;
 			}
 
@@ -4217,12 +4217,7 @@ bool SnakeScript::parse()
 				cmd_info.Type = CMD_CALLPROC;
 
 				auto leftBracket = cword.find("(");
-
-				if (leftBracket == NOT_FOUND)
-				{
-					err_str = "Error! Brak '(' przy wywolywaniu procedury " + cword;
-					return false;
-				}
+				auto rightBracket = cword.find(")");
 
 				cmd_info.s1 = procName;
 
@@ -4232,7 +4227,7 @@ bool SnakeScript::parse()
 
 				int start = leftBracket+1;
 
-				while (true)
+				while (leftBracket+1 != rightBracket)
 				{
 					for (auto i = start; i < cword.length(); i++)
 					{
