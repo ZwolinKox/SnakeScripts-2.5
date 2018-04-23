@@ -132,6 +132,7 @@ public:
 		bool isWhileTrue{ false };
 		std::vector<std::string> initValues;
 		std::vector<COMMAND_INFO> yield_info;
+		std::vector<std::string> procArguments;
 	};
 
 	struct METHOD
@@ -190,6 +191,13 @@ public:
 		CLASS Class;
 	};
 
+	struct CPP_FUNC
+	{
+		std::string name;
+		std::function<int(SnakeScript* script)> body;
+		int returnValue;
+	};
+
 	std::vector<COMMAND_INFO> Commands;
 	std::vector<VARIABLE> Variables;
 	std::stack<VARIABLE> LocalVariables;
@@ -242,11 +250,11 @@ public:
 	bool get_logic_operator(int &operator_buff);
 	bool is_true(int nVarValue, EOpType OpType, int nValue);
 	bool loadStdLibs();
+	std::vector<std::string> get_proc_arguments();
 
 	std::string get_script_name();
 	bool parse();
 	bool run();
-	//bool eval();
 
 public:
 

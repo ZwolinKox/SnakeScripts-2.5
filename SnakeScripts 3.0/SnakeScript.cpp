@@ -1437,6 +1437,37 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				Procs[procId].Yield = cmd_array[i].yield_info;
 			}
 
+			if (cmd_array[i].procArguments.size() != Procs[procId].Arguments.size())
+			{
+				err_str = "Error! Bledna liczba argumentow przy wywolaniu procedury: " + Procs[procId].name;
+				return false;
+			}
+
+			std::stack<VARIABLE> arg_tmp;
+
+			int startArgcSize = Procs[procId].Arguments.size();
+
+			for (auto j = startArgcSize-1; j >= 0 ; j--)
+			{
+				VARIABLE var;
+				var = Procs[procId].Arguments.top();
+				arg_tmp.push(var);
+				Procs[procId].Arguments.pop();
+
+				Parser parser{ cmd_array[i].procArguments[j] };
+				Expression* expr = parser.parse_Expression();
+
+				var.value = expr->eval(*this);
+
+				LocalVariables.push(var);
+			}
+
+			while (!arg_tmp.empty())
+			{
+				Procs[procId].Arguments.push(arg_tmp.top());
+				arg_tmp.pop();
+			}
+
 			if (isMethod)
 			{
 				std::stack<VARIABLE> temp;
@@ -2674,6 +2705,66 @@ bool SnakeScript::get_brace()
 	return true;
 }
 
+std::vector<std::string> SnakeScript::get_proc_arguments()
+{
+	std::vector<std::string> tmp;
+
+	const char* CHAR_START = "(";
+	const char* CHAR_END = ")";
+	int pos2;
+
+	pos = bufor.find_first_not_of(WS_SET, pos);
+
+	if (pos == NOT_FOUND)
+		return tmp;
+
+	cword = bufor.substr(pos, 1);
+
+	if (cword != CHAR_START)
+		return tmp;
+
+	pos = bufor.find_first_not_of(CHAR_START, pos);
+
+	if (pos == NOT_FOUND)
+		return tmp;
+
+	pos2 = bufor.find_first_of(CHAR_END, pos + 1);
+
+	if (pos2 == NOT_FOUND)
+		return tmp;
+
+
+	cword = bufor.substr(pos, pos2 - pos);
+
+	pos = bufor.find_first_of(WS_SET, pos2);
+
+	if (pos == NOT_FOUND)
+		pos = bufor.size() - 1;
+
+	std::string toPush;
+
+	for (auto i = 0; i < cword.length(); i++)
+	{
+		toPush.push_back(cword[i]);
+
+		if (toPush.find_first_of(WS_SET) != NOT_FOUND)
+		{
+			if (toPush[toPush.length() - 2] == ',')
+				toPush.pop_back();
+
+			toPush.pop_back();
+			tmp.push_back(toPush);
+			toPush.clear();
+		}
+	}
+
+	if (!toPush.empty())
+		tmp.push_back(toPush);
+
+	return tmp;
+}
+
+
 bool SnakeScript::parse()
 {
 	bool bNotCommand{ false }; //flaga 
@@ -3480,18 +3571,31 @@ bool SnakeScript::parse()
 				return false;
 			}
 
-			if (!checkVarName(cword))
-			{
-				err_str = "Error! Procedura " + cword + " ma niedozwolone znaki!";
-				return false;
-			}
+			//if (!checkVarName(cword))
+			//{
+				//err_str = "Error! Procedura " + cword + " ma niedozwolone znaki!";
+				//return false;
+			//}
 
 			proc_info.name = cword;
+
+			cmd_info.procArguments = get_proc_arguments();
 
 			if (!get_word("{"))
 			{
 				err_str = "Error! Spodziewane '{'";
 				return false;
+			}
+
+			while (!proc_info.Arguments.empty())
+				proc_info.Arguments.pop();
+
+			for (auto i = 0; i < cmd_info.procArguments.size(); i++)
+			{
+				VARIABLE var;
+				var.name = cmd_info.procArguments[i];
+				var.value = 0;
+				proc_info.Arguments.push(var);
 			}
 
 			isProc = true;
@@ -4055,9 +4159,12 @@ bool SnakeScript::parse()
 			cmd_info.Type = CMD_YIELD;
 
 		//Wywolanie metody/procedury
-		else if (cword[cword.length() - 1] == ')')
-		{
-			auto dot = cword.find_first_of('.');
+		//else if (cword[cword.length() - 1] == ')')
+		else if (cword.find('(') != NOT_FOUND)
+		{		
+			std::string procName = cword.substr(0, cword.find('('));
+
+			auto dot = procName.find_first_of('.');
 
 			if (dot != NOT_FOUND)
 			{
@@ -4117,8 +4224,39 @@ bool SnakeScript::parse()
 					return false;
 				}
 
-				cmd_info.s1 = cword.substr(0, leftBracket);
+				cmd_info.s1 = procName;
 
+				cmd_info.procArguments.clear();
+
+				std::string toPush;
+
+				int start = leftBracket+1;
+
+				while (true)
+				{
+					for (auto i = start; i < cword.length(); i++)
+					{
+						toPush.push_back(cword[i]);
+					}
+
+					if (toPush[toPush.length() - 1] == ',')
+						toPush.pop_back();
+
+					if (cword[cword.length() - 1] == ')')
+					{
+						toPush.pop_back();
+						cmd_info.procArguments.push_back(toPush);
+						toPush.clear();
+						break;
+					}
+						
+					cmd_info.procArguments.push_back(toPush);
+					toPush.clear();
+
+					start = 0;
+
+					get_token();
+				}
 
 				if (get_word("{"))
 				{
@@ -4231,6 +4369,7 @@ bool SnakeScript::parse()
 
 	return true;
 }
+
 
 //Parser matematyczny
 
