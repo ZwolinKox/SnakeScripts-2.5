@@ -864,6 +864,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 	static bool isLambda{ false };
 	bool isLambaNoStatic{ false };
 	static int lambdaLocalVariables{ 0 };
+	int localVariables{ 0 };
 
 	for (int i = start; i <= stop; ++i)
 	{
@@ -1437,37 +1438,6 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				Procs[procId].Yield = cmd_array[i].yield_info;
 			}
 
-			if (cmd_array[i].procArguments.size() != Procs[procId].Arguments.size())
-			{
-				err_str = "Error! Bledna liczba argumentow przy wywolaniu procedury: " + Procs[procId].name + " " + std::to_string(cmd_array[i].procArguments.size()) + " / " + std::to_string(Procs[procId].Arguments.size());
-				return false;
-			}
-
-			std::stack<VARIABLE> arg_tmp;
-
-			int startArgcSize = Procs[procId].Arguments.size();
-
-			for (auto j = startArgcSize-1; j >= 0 ; j--)
-			{
-				VARIABLE var;
-				var = Procs[procId].Arguments.top();
-				arg_tmp.push(var);
-				Procs[procId].Arguments.pop();
-
-				Parser parser{ cmd_array[i].procArguments[j] };
-				Expression* expr = parser.parse_Expression();
-
-				var.value = expr->eval(*this);
-
-				LocalVariables.push(var);
-			}
-
-			while (!arg_tmp.empty())
-			{
-				Procs[procId].Arguments.push(arg_tmp.top());
-				arg_tmp.pop();
-			}
-
 			if (isMethod)
 			{
 				std::stack<VARIABLE> temp;
@@ -1520,6 +1490,42 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 			}
 			else
 			{
+				if (cmd_array[i].procArguments.size() != Procs[procId].Arguments.size())
+				{
+					err_str = "Error! Bledna liczba argumentow przy wywolaniu procedury: " + Procs[procId].name + " " + std::to_string(cmd_array[i].procArguments.size()) + " / " + std::to_string(Procs[procId].Arguments.size());
+					return false;
+				}
+
+				/*if (!Procs[procId].Arguments.empty())
+				{
+					std::stack<VARIABLE> arg_tmp;
+
+					int startArgcSize = Procs[procId].Arguments.size();
+
+					for (auto j = startArgcSize - 1; j >= 0; j--)
+					{
+						VARIABLE var;
+						var = Procs[procId].Arguments.top();
+						arg_tmp.push(var);
+						Procs[procId].Arguments.pop();
+
+						Parser parser{ cmd_array[i].procArguments[j] };
+						Expression* expr = parser.parse_Expression();
+
+						var.value = expr->eval(*this);
+						cout << "VAL: " << var.value << endl;
+
+						LocalVariables.push(var);
+						Procs[procId].localVariables++;
+					}
+
+					while (!arg_tmp.empty())
+					{
+						Procs[procId].Arguments.push(arg_tmp.top());
+						arg_tmp.pop();
+					}
+				}*/
+
 				isProc = true;
 
 				if (!execute_commands(Procs[procId].Body, 0, Procs[procId].Body.size() - 1))
@@ -2787,6 +2793,7 @@ bool SnakeScript::parse()
 	{
 		cmd_info.yield_info.clear();
 		cmd_info.initValues.clear();
+		cmd_info.procArguments.clear();
 
 		if (!get_token())
 			return true;

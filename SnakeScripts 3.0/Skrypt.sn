@@ -1,11 +1,19 @@
 
-def costam (x, y, z)
+def xd
 {
-	Write "Xd"
-	Write x*y*z
+	Write zmienna
 }
 
+def proc (x, y, z)
+{
+	let zmienna = 20
+	Write zmienna
+	xd()
+	Write zmienna
+}
 
-costam(10, 10)
+proc(2, 4, 6)
+
+
 
 
