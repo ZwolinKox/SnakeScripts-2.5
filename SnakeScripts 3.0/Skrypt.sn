@@ -1,19 +1,8 @@
 
-def xd
+def proc
 {
+	let zmienna = 90
 	Write zmienna
 }
 
-def proc (x, y, z)
-{
-	let zmienna = 20
-	Write zmienna
-	xd()
-	Write zmienna
-}
-
-proc(2, 4, 6)
-
-
-
-
+proc()

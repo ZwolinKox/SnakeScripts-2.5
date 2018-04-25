@@ -864,7 +864,6 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 	static bool isLambda{ false };
 	bool isLambaNoStatic{ false };
 	static int lambdaLocalVariables{ 0 };
-	int localVariables{ 0 };
 
 	for (int i = start; i <= stop; ++i)
 	{
