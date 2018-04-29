@@ -1,8 +1,9 @@
 
-def proc
+class Klasa
 {
-	let zmienna = 90
-	Write zmienna
-}
+public:
 
-proc()
+	
+
+
+};

@@ -5,6 +5,12 @@
 SnakeScript::SnakeScript(std::string fileName)
 	: scriptName(fileName)
 {
+	if (!loadStdLibs())
+	{
+		cout << err_str << endl;
+		this->~SnakeScript();
+	}
+
 }
 
 std::string SnakeScript::get_script_name()
@@ -92,13 +98,6 @@ bool SnakeScript::run()
 
 	try
 	{
-		if (!loadStdLibs())
-		{
-			cout << err_str << endl;
-			return false;
-		}
-
-
 		std::ifstream plik;
 		plik.open(scriptName);
 		char c;
@@ -170,6 +169,7 @@ bool SnakeScript::run()
 
 SnakeScript::~SnakeScript()
 {
+
 }
 
 bool SnakeScript::get_token()
@@ -765,6 +765,14 @@ int SnakeScript::get_object_id(std::string name)
 
 		return -1;
 	}
+}
+
+void SnakeScript::runThread()
+{
+	std::thread *scriptThread;
+
+	scriptThread = new std::thread([=] {run(); });
+
 }
 
 int SnakeScript::get_object_var_id(string name, string objectName)
@@ -1437,6 +1445,41 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				Procs[procId].Yield = cmd_array[i].yield_info;
 			}
 
+			if (Procs[procId].Arguments.size() != cmd_array[i].procArguments.size())
+			{
+				err_str = "Error! Procedura " + Procs[procId].name + " przyjmuje " + std::to_string(Procs[procId].Arguments.size()) + " argumenty, a nie " + std::to_string(cmd_array[i].procArguments.size());
+				return false;
+			}
+
+			if (!Procs[procId].Arguments.empty())
+			{
+				std::stack<VARIABLE> arg_tmp;
+
+				int startArgcSize = Procs[procId].Arguments.size();
+
+				for (auto j = startArgcSize - 1; j >= 0; j--)
+				{
+					VARIABLE var;
+					var = Procs[procId].Arguments.top();
+					arg_tmp.push(var);
+					Procs[procId].Arguments.pop();
+
+					Parser parser{ cmd_array[i].procArguments[j] };
+					Expression* expr = parser.parse_Expression();
+
+					var.value = expr->eval(*this);
+
+					LocalVariables.push(var);
+					Procs[procId].localVariables++;
+				}
+
+				while (!arg_tmp.empty())
+				{
+					Procs[procId].Arguments.push(arg_tmp.top());
+					arg_tmp.pop();
+				}
+			}
+
 			if (isMethod)
 			{
 				std::stack<VARIABLE> temp;
@@ -1450,8 +1493,27 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 				isMethod = false;
 
-				if (!execute_commands(Procs[procId].Body, 0, Procs[procId].Body.size() - 1))
-					return false;
+				if (!isProc)
+				{
+					isProc = true; 
+
+					if (!execute_commands(Procs[procId].Body, 0, Procs[procId].Body.size() - 1))
+						return false;
+
+					isProc = false;
+				}
+				else
+				{
+					if (!execute_commands(Procs[procId].Body, 0, Procs[procId].Body.size() - 1))
+						return false;
+				}
+
+
+				while (Procs[procId].localVariables > 0)
+				{
+					LocalVariables.pop();
+					Procs[procId].localVariables--;
+				}
 
 				isMethod = true;
 
@@ -1476,6 +1538,13 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				if (!execute_commands(Procs[procId].Body, 0, Procs[procId].Body.size() - 1))
 					return false;
 
+				while (Procs[procId].localVariables > 0)
+				{
+					LocalVariables.pop();
+					Procs[procId].localVariables--;
+				}
+
+				Procs[procId].Yield.clear();
 
 				Procs[procId].returnValue = lastReturn;
 
@@ -1495,52 +1564,22 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 					return false;
 				}
 
-				/*if (!Procs[procId].Arguments.empty())
-				{
-					std::stack<VARIABLE> arg_tmp;
-
-					int startArgcSize = Procs[procId].Arguments.size();
-
-					for (auto j = startArgcSize - 1; j >= 0; j--)
-					{
-						VARIABLE var;
-						var = Procs[procId].Arguments.top();
-						arg_tmp.push(var);
-						Procs[procId].Arguments.pop();
-
-						Parser parser{ cmd_array[i].procArguments[j] };
-						Expression* expr = parser.parse_Expression();
-
-						var.value = expr->eval(*this);
-						cout << "VAL: " << var.value << endl;
-
-						LocalVariables.push(var);
-						Procs[procId].localVariables++;
-					}
-
-					while (!arg_tmp.empty())
-					{
-						Procs[procId].Arguments.push(arg_tmp.top());
-						arg_tmp.pop();
-					}
-				}*/
-
 				isProc = true;
 
 				if (!execute_commands(Procs[procId].Body, 0, Procs[procId].Body.size() - 1))
 					return false;
 
+				while (Procs[procId].localVariables > 0)
+				{
+					LocalVariables.pop();
+					Procs[procId].localVariables--;
+				}
+
+				Procs[procId].Yield.clear();
+
 				Procs[procId].returnValue = lastReturn;
 				isProc = false;
 			}
-
-			while (Procs[procId].localVariables > 0)
-			{
-				LocalVariables.pop();
-				Procs[procId].localVariables--;
-			}
-
-			Procs[procId].Yield.clear();
 
 		}	break;
 
@@ -1593,7 +1632,91 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 			int matchingMethod = -1;
 			string methodName = cmd_array[i].s2;
 
-			if (isMethod)
+
+			if (cmd_array[i].s1 == "cpp")
+			{
+				int objID = -1;
+
+				objID = get_object_id("cpp");
+
+				if (objID < 0)
+				{
+					err_str = "Error! Plik nie posiada obiektu cpp!";
+					return false;
+				}
+
+				int metID = -1;
+
+				for (size_t j = 0; j < Objects[objID].Class.Methods.size(); j++)
+				{
+					if (methodName == Objects[objID].Class.Methods[j].name)
+					{
+						metID = j;
+						break;
+					}
+				}
+
+				bool isDefaultMethod{ false };
+
+				if (metID < 0)
+				{
+					for (size_t j = 0; j < Objects[objID].Class.Methods.size(); j++)
+					{
+						if (Objects[objID].Class.Methods[j].name == "missing")
+						{
+							metID = j;
+							isDefaultMethod = true;
+							break;
+						}
+					}
+				}
+
+				if (metID < 0)
+				{
+					err_str = "Error! Klasa cpp nie posiada domyslnej metody!";
+					return false;
+				}
+
+
+				if (cmd_array[i].procArguments.size() != Objects[objID].Class.Methods[metID].CPP_BODY[0].howMuchArgc)
+				{
+					err_str = "Error! Metoda nie przyjmuje " + std::to_string(cmd_array[i].procArguments.size()) + " argumentow, a " + std::to_string(Objects[objID].Class.Methods[metID].CPP_BODY[0].howMuchArgc);
+					return false;
+				}
+
+
+				if (!isDefaultMethod)
+				{
+					int startArgcSize = Objects[objID].Class.Methods[metID].CPP_BODY[0].howMuchArgc;
+
+					for (auto j = 0; j < startArgcSize; j++)
+					{
+						VARIABLE var;
+						var.name = "CPP_ARGC";
+
+						Parser parser{ cmd_array[i].procArguments[j] };
+						Expression* expr = parser.parse_Expression();
+						var.value = expr->eval(*this);
+
+						CPP_ARGC.push_back(var);
+					}
+
+					lastReturn = Objects[objID].Class.Methods[metID].CPP_BODY[0].body(this);
+
+					CPP_ARGC.clear();
+
+					std::cout << lastReturn << std::endl;
+				}
+				else
+				{
+					if (!execute_commands(Objects[objID].Class.Methods[metID].Body, 0, Objects[objID].Class.Methods[metID].Body.size() - 1))
+						return false;
+
+					lastReturn = Objects[objID].Class.Methods[metID].returnValue;
+				}
+
+			}
+			else if (isMethod)
 			{
 				for (auto j = 0; j < Objects[objectNumber].Class.Methods.size(); j++)
 				{
@@ -1614,6 +1737,41 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 							matchingMethod = j;
 							break;
 						}
+					}
+				}
+
+				if (Objects[objectNumber].Class.Methods[matchingMethod].Arguments.size() != cmd_array[i].procArguments.size())
+				{
+					err_str = "Error! Procedura " + Objects[objectNumber].Class.Methods[matchingMethod].name + " przyjmuje " + std::to_string(Objects[objectNumber].Class.Methods[matchingMethod].Arguments.size()) + " argumenty, a nie " + std::to_string(cmd_array[i].procArguments.size());
+					return false;
+				}
+
+				if (!Objects[objectNumber].Class.Methods[matchingMethod].Arguments.empty())
+				{
+					std::stack<VARIABLE> arg_tmp;
+
+					int startArgcSize = Objects[objectNumber].Class.Methods[matchingMethod].Arguments.size();
+
+					for (auto j = startArgcSize - 1; j >= 0; j--)
+					{
+						VARIABLE var;
+						var = Objects[objectNumber].Class.Methods[matchingMethod].Arguments.top();
+						arg_tmp.push(var);
+						Objects[objectNumber].Class.Methods[matchingMethod].Arguments.pop();
+
+						Parser parser{ cmd_array[i].procArguments[j] };
+						Expression* expr = parser.parse_Expression();
+
+						var.value = expr->eval(*this);
+
+						LocalVariables.push(var);
+						Objects[objectNumber].Class.Methods[matchingMethod].localVariables++;
+					}
+
+					while (!arg_tmp.empty())
+					{
+						Objects[objectNumber].Class.Methods[matchingMethod].Arguments.push(arg_tmp.top());
+						arg_tmp.pop();
 					}
 				}
 
@@ -1702,6 +1860,41 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 					return false;
 				}
 
+				if (Objects[objectNumber].Class.Methods[matchingMethod].Arguments.size() != cmd_array[i].procArguments.size())
+				{
+					err_str = "Error! Procedura " + Objects[objectNumber].Class.Methods[matchingMethod].name + " przyjmuje " + std::to_string(Objects[objectNumber].Class.Methods[matchingMethod].Arguments.size()) + " argumenty, a nie " + std::to_string(cmd_array[i].procArguments.size());
+					return false;
+				}
+
+				if (!Objects[objectNumber].Class.Methods[matchingMethod].Arguments.empty())
+				{
+					std::stack<VARIABLE> arg_tmp;
+
+					int startArgcSize = Objects[objectNumber].Class.Methods[matchingMethod].Arguments.size();
+
+					for (auto j = startArgcSize - 1; j >= 0; j--)
+					{
+						VARIABLE var;
+						var = Objects[objectNumber].Class.Methods[matchingMethod].Arguments.top();
+						arg_tmp.push(var);
+						Objects[objectNumber].Class.Methods[matchingMethod].Arguments.pop();
+
+						Parser parser{ cmd_array[i].procArguments[j] };
+						Expression* expr = parser.parse_Expression();
+
+						var.value = expr->eval(*this);
+
+						LocalVariables.push(var);
+						Objects[objectNumber].Class.Methods[matchingMethod].localVariables++;
+					}
+
+					while (!arg_tmp.empty())
+					{
+						Objects[objectNumber].Class.Methods[matchingMethod].Arguments.push(arg_tmp.top());
+						arg_tmp.pop();
+					}
+				}
+
 				methodId = matchingMethod;
 
 				if (Objects[objectNumber].Class.Methods[matchingMethod].status != PUBLIC && !isMethod)
@@ -1757,6 +1950,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 				isMethod = false;
 			}
+
 		}	break;
 
 		case CMD_ELSEIF:
@@ -3109,6 +3303,9 @@ bool SnakeScript::parse()
 
 				if (cword == "def" || cword == "virtual" || cword == "override")
 				{
+					while(!method_info.Arguments.empty())
+						method_info.Arguments.pop();
+
 					if (class_info.isStruct)
 					{
 						err_str = "Error! Struktura nie moze posiadac metod!";
@@ -3147,6 +3344,7 @@ bool SnakeScript::parse()
 						return false;
 					}
 
+					
 					method_info.name = cword;
 
 					if (!class_info.Methods.empty())
@@ -3175,6 +3373,16 @@ bool SnakeScript::parse()
 
 							}
 						}
+					}
+
+					std::vector<std::string> argc = get_proc_arguments();
+
+					for (auto i = 0; i < argc.size(); i++)
+					{
+						VARIABLE var;
+						var.name = argc[i];
+						var.value = 0;
+						method_info.Arguments.push(var);
 					}
 
 					if (!get_token() || cword != "{")
@@ -4168,6 +4376,8 @@ bool SnakeScript::parse()
 		//else if (cword[cword.length() - 1] == ')')
 		else if (cword.find('(') != NOT_FOUND)
 		{		
+			cmd_info.procArguments.clear();
+
 			std::string procName = cword.substr(0, cword.find('('));
 
 			auto dot = procName.find_first_of('.');
@@ -4187,21 +4397,58 @@ bool SnakeScript::parse()
 				cmd_info.s1 = cword.substr(0, dot);
 				cmd_info.s2 = cword.substr(dot + 1);
 
-				if (isMethod && cmd_info.s1 != "this")
-				{
-					err_str = "Error! Nie mozna wywolac metody innego obiektu niz 'this' w klasie!";
-					return false;
-				}
-
-				for (auto i = cmd_info.s2.length()-1; i != 0; i--)
+				for (auto i = cmd_info.s2.length()-1; i > 0; i--)
 				{
 					if (cmd_info.s2[i] == '(')
 					{
 						cmd_info.s2.pop_back();
 						break;
 					}
+
 					cmd_info.s2.pop_back();
+
 				}
+
+				if (isMethod && cmd_info.s1 != "this")
+				{
+					err_str = "Error! Nie mozna wywolac metody innego obiektu niz 'this' w klasie!";
+					return false;
+				}
+
+				cmd_info.procArguments.clear();
+
+
+				std::string toPush;
+
+				auto rightBracket = cword.find(")");
+				int start = leftBracket + 1;
+
+				while (leftBracket + 1 != rightBracket)
+				{
+					for (auto i = start; i < cword.length(); i++)
+					{
+						toPush.push_back(cword[i]);
+					}
+
+					if (toPush[toPush.length() - 1] == ',')
+						toPush.pop_back();
+
+					if (cword[cword.length() - 1] == ')')
+					{
+						toPush.pop_back();
+						cmd_info.procArguments.push_back(toPush);
+						toPush.clear();
+						break;
+					}
+
+					cmd_info.procArguments.push_back(toPush);
+					toPush.clear();
+
+					start = 0;
+
+					get_token();
+				}
+
 
 				if (get_word("{"))
 				{
@@ -4414,6 +4661,7 @@ bool SnakeScript::Parser::whileParseVariable(char c)
 {
 	if (isalnum(c))
 		return true;
+
 	if (c == '[')
 		return true;
 	if (c == ']')
@@ -4427,6 +4675,8 @@ bool SnakeScript::Parser::whileParseVariable(char c)
 	if (c == ')')
 		return true;	
 	if (c == '_')
+		return true;
+	if (c == ',')
 		return true;
 
 	return false;

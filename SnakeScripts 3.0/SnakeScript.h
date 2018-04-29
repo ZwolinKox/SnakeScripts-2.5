@@ -28,9 +28,6 @@ using std::endl;
 
 class SnakeScript
 {
-public:
-
-
 	using var = int;	//Oszczêdzi nam to w przysz³oœci problemów
 
 	const char* WS_SET = " \t\r\n";
@@ -135,6 +132,8 @@ public:
 		std::vector<std::string> procArguments;
 	};
 
+	struct CPP_FUNC;
+
 	struct METHOD
 	{
 		ENCAPSULATION status{ PRIVATE };
@@ -147,6 +146,7 @@ public:
 		std::vector<COMMAND_INFO> Yield;
 		int localVariables{ 0 };
 		var returnValue{ 0 };
+		std::vector<CPP_FUNC> CPP_BODY;
 	};
 
 	struct PROC
@@ -193,6 +193,7 @@ public:
 
 	struct CPP_FUNC
 	{
+		int howMuchArgc{ 0 };
 		std::string name;
 		std::function<int(SnakeScript* script)> body;
 		int returnValue;
@@ -254,9 +255,92 @@ public:
 
 	std::string get_script_name();
 	bool parse();
-	bool run();
 
 public:
+
+	void registerFunc(std::function<int(SnakeScript*)> func, std::string name, int argcNumber)
+	{
+		int classID = get_class_id("cpp");
+
+		if (classID < 0)
+		{
+			std::cout << "Error! Skrypt nie posiada pliku Self.sn lub klasy cpp!" << std::endl;
+			return;
+		}
+
+		CPP_FUNC cpp_func;
+
+		cpp_func.name = name;
+		cpp_func.howMuchArgc = argcNumber;
+		cpp_func.body = func;
+
+		METHOD thisMethod;
+		thisMethod.CPP_BODY.push_back(cpp_func);
+		thisMethod.className = "cpp";
+		thisMethod.name = name;
+		thisMethod.status = PUBLIC;
+
+		Classes[classID].Methods.push_back(thisMethod);
+	}
+
+	VARIABLE getVariable(std::string name)
+	{
+		for (auto i = 0; i < Variables.size(); i++)
+		{
+			if (Variables[i].name == name)
+				return Variables[i];
+		}
+
+		VARIABLE var = get_local_variable(name, false);
+
+		return var;
+	}
+
+	var getVariableValue(std::string name)
+	{
+		for (auto i = 0; i < Variables.size(); i++)
+		{
+			if (Variables[i].name == name)
+				return Variables[i].value;
+		}
+
+		VARIABLE var = get_local_variable(name, false);
+
+		return var.value;
+	}
+
+	var getArrayValue(std::string name, size_t index)
+	{
+		for (auto i = 0; i < Arrays.size(); i++)
+		{
+			if (Arrays[i][0].name == name)
+				return Arrays[i][index].value;
+		}
+
+		return -1;
+	}
+
+	VARIABLE getArray(std::string name, size_t index)
+	{
+		for (auto i = 0; i < Arrays.size(); i++)
+		{
+			if (Arrays[i][0].name == name)
+				return Arrays[i][index];
+		}
+
+		VARIABLE var;
+		var.name = "UNKNOWN";
+		var.value = -1;
+		var.status = ENCAPSULATION_UNKNOWN;
+
+		return var;
+	}
+
+	bool run();
+	void runThread();
+
+	//Argumenty dla funkcji z C++
+	std::vector<VARIABLE> CPP_ARGC;
 
 	//Parser matematyczny
 
@@ -326,7 +410,7 @@ public:
 			auto itr = name.find_first_of('[');
 			auto itrObj = name.find('.');
 			auto findThis = name.find("this");
-			auto lBracket = name.find("()");
+			auto lBracket = name.find_first_of("(");
 			auto isRandom = name.find("random");
 
 			if (isRandom != NOT_FOUND)
@@ -446,6 +530,28 @@ public:
 				cmd_info.s1 = objectName;
 				cmd_info.s2 = methodName;
 
+				int start = lBracket + 1;
+				std::string toPush;
+
+				for (auto i = start; i < name.length(); i++)
+				{
+					toPush.push_back(name[i]);
+
+					if (name[i] == ',')
+					{
+						toPush.pop_back();
+						cmd_info.procArguments.push_back(toPush);
+						toPush.clear();
+					}
+					else if (name[i] == ')')
+					{
+						toPush.pop_back();
+						cmd_info.procArguments.push_back(toPush);
+						toPush.clear();
+						break;
+					}
+				}
+
 				for (auto i = 0; i < memory.Objects[memory.objectNumber].Class.Methods.size(); i++)
 				{
 					if (methodName == memory.Objects[memory.objectNumber].Class.Methods[i].name)
@@ -460,20 +566,23 @@ public:
 
 				std::vector<COMMAND_INFO> cmd_array;
 
-				cmd_info.Type = CMD_UNKNOWN;
-				cmd_array.push_back(cmd_info);
+
 				cmd_info.Type = CMD_CALLMETHOD;
 				cmd_array.push_back(cmd_info);
-				cmd_info.Type = CMD_UNKNOWN;
-				cmd_array.push_back(cmd_info);
 
-				memory.execute_commands(cmd_array, 0, cmd_array.size() - 1);
-
-				return memory.Objects[memory.objectNumber].Class.Methods[methodId].returnValue;
+				if (!memory.execute_commands(cmd_array, 0, cmd_array.size() - 1))
+					std::cout << memory.err_str << std::endl;
+				else
+					return memory.Objects[memory.objectNumber].Class.Methods[methodId].returnValue;
 			}
 
 			else if (lBracket != NOT_FOUND)
 			{
+				auto rBracket = name.find_last_of(")");
+
+			if (rBracket == NOT_FOUND)
+					throw Not_parsed();
+
 				SnakeScript::COMMAND_INFO cmd_info;
 
 				std::string procName = name.substr(0, lBracket);
@@ -482,6 +591,29 @@ public:
 
 				cmd_info.s1 = procName;
 				cmd_info.Type = CMD_CALLPROC;
+
+				int start = lBracket + 1;
+				std::string toPush;
+
+				for (auto i = start; i < name.length(); i++)
+				{
+					toPush.push_back(name[i]);
+
+					if (name[i] == ',')
+					{
+						toPush.pop_back();
+						cmd_info.procArguments.push_back(toPush);
+						toPush.clear();
+					}
+					else if (name[i] == ')')
+					{
+						toPush.pop_back();
+						cmd_info.procArguments.push_back(toPush);
+						toPush.clear();
+						break;
+					}
+				}
+				
 
 				for (auto i = 0; i < memory.Procs.size(); i++)
 				{
@@ -504,7 +636,9 @@ public:
 				cmd_info.Type = CMD_UNKNOWN;
 				cmd_array.push_back(cmd_info);
 
-				memory.execute_commands(cmd_array, 0, cmd_array.size()-1);
+				if (!memory.execute_commands(cmd_array, 0, cmd_array.size() - 1))
+					cout << memory.err_str << endl;
+				
 
 				return memory.Procs[procId].returnValue;
 			}
