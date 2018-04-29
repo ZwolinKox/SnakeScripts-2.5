@@ -336,6 +336,165 @@ public:
 		return var;
 	}
 
+	bool runProc(std::string name)
+	{
+		for (auto i = 0; i < Procs.size(); i++)
+		{
+			if (Procs[i].name == name)
+			{
+				if (!execute_commands(Procs[i].Body, 0, Procs[i].Body.size() - 1))
+				{
+					std::cout << err_str << std::endl;
+					return false;
+				}
+
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	bool runMethod(std::string methodName, std::string objectName)
+	{
+		int objectID = -1;
+		int methodID = -1;
+
+		for (auto i = 0; i < Objects.size(); i++)
+		{
+			if (Objects[i].objectName == objectName)
+			{
+				objectID = i;
+				break;
+			}
+		}
+
+		if (objectID < 0)
+			return false;
+
+		for (auto i = 0; i < Objects[objectID].Class.Methods.size(); i++)
+		{
+
+			if (Objects[objectID].Class.Methods[i].name == methodName)
+			{
+				methodID = i;
+				break;
+			}
+			else if (Objects[objectID].Class.Methods[i].name == "missing")
+				methodID = i;
+		}
+
+		if (methodID < 0)
+		{
+			std::cout << "Error! Obiekt " + Objects[objectID].objectName + " nie ma metody " + methodName + ", ani metody domyslnej!" << std::endl;
+			return false;
+		}
+
+		if (Objects[objectID].Class.Methods[methodID].status != PUBLIC && Objects[objectID].Class.Methods[methodID].name != "missing")
+		{
+			std::cout << "Error! Metoda " << Objects[objectID].Class.Methods[methodID].name << " nie jest publiczna!" << std::endl;
+			return false;
+		}
+
+		if (!execute_commands(Objects[objectID].Class.Methods[methodID].Body, 0, Objects[objectID].Class.Methods[methodID].Body.size() - 1))
+		{
+			std::cout << err_str << std::endl;
+			return false;
+		}
+
+		return true;
+	}
+
+	bool runProc(std::string name, std::vector<std::string> stack)
+	{
+		COMMAND_INFO cmd_info;
+		std::vector<COMMAND_INFO> cmd_array;
+		std::stack<VARIABLE> tmp;
+
+		cmd_info.procArguments = stack;
+		cmd_info.Type = CMD_CALLPROC;
+		cmd_info.s1 = name;
+
+		cmd_array.push_back(cmd_info);
+		
+		for (auto i = 0; i < Procs.size(); i++)
+		{
+			if (Procs[i].name == name)
+			{
+				if (!execute_commands(cmd_array, 0, cmd_array.size()-1))
+				{
+					std::cout << err_str << std::endl;
+					return false;
+				}
+
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	bool runMethod(std::string methodName, std::string objectName, std::vector<std::string> stack)
+	{
+		int objectID = -1;
+		int methodID = -1;
+
+		COMMAND_INFO cmd_info;
+		std::vector<COMMAND_INFO> cmd_array;
+		std::stack<VARIABLE> tmp;
+
+		cmd_info.procArguments = stack;
+		cmd_info.Type = CMD_CALLMETHOD;
+		cmd_info.s1 = objectName;
+		cmd_info.s2 = methodName;
+
+		cmd_array.push_back(cmd_info);
+
+		for (auto i = 0; i < Objects.size(); i++)
+		{
+			if (Objects[i].objectName == objectName)
+			{
+				objectID = i;
+				break;
+			}
+		}
+
+		if (objectID < 0)
+			return false;
+
+		for (auto i = 0; i < Objects[objectID].Class.Methods.size(); i++)
+		{
+
+			if (Objects[objectID].Class.Methods[i].name == methodName)
+			{
+				methodID = i;
+				break;
+			}
+			else if (Objects[objectID].Class.Methods[i].name == "missing")
+				methodID = i;
+		}
+
+		if (methodID < 0)
+		{
+			std::cout << "Error! Obiekt " + Objects[objectID].objectName + " nie ma metody " + methodName + ", ani metody domyslnej!" << std::endl;
+			return false;
+		}
+
+		if (Objects[objectID].Class.Methods[methodID].status != PUBLIC && Objects[objectID].Class.Methods[methodID].name != "missing")
+		{
+			std::cout << "Error! Metoda " << Objects[objectID].Class.Methods[methodID].name << " nie jest publiczna!" << std::endl;
+			return false;
+		}
+
+		if (!execute_commands(cmd_array, 0, cmd_array.size() - 1))
+		{
+			std::cout << err_str << std::endl;
+			return false;
+		}
+
+		return true;
+	}
+
 	bool run();
 	void runThread();
 

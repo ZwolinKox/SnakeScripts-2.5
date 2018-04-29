@@ -3,7 +3,22 @@ class Klasa
 {
 public:
 
-	
+	def metoda (x)
+	{
+		Write "hahahahahah"
+		Print "argc: " Write x
+	}
 
 
 };
+
+
+def xd (x)
+{
+	Write "XD"
+	Print "argc: " Write x
+}
+
+Object obj = Klasa
+
+
