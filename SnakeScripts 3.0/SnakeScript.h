@@ -641,53 +641,11 @@ public:
 			{
 				SnakeScript::COMMAND_INFO cmd_info;
 
-				std::string methodName = name.substr(itrObj+1, lBracket);
+				std::string methodName = name.substr(itrObj + 1, lBracket - 3);
 				methodName.pop_back();
 				methodName.pop_back();
 
 				int methodId = -1;
-
-				cmd_info.s2 = methodName;
-
-				for (auto i = 0; i < memory.Objects[memory.objectNumber].Class.Methods.size(); i++)
-				{
-					if (methodName == memory.Objects[memory.objectNumber].Class.Methods[i].name)
-					{
-						methodId = i;
-						break;
-					}
-				}
-
-				if (methodId == -1)
-					throw Variable_not_found();
-
-				std::vector<COMMAND_INFO> cmd_array;
-
-				cmd_info.Type = CMD_UNKNOWN;
-				cmd_array.push_back(cmd_info);
-				cmd_info.Type = CMD_CALLMETHOD;
-				cmd_array.push_back(cmd_info);
-				cmd_info.Type = CMD_UNKNOWN;
-				cmd_array.push_back(cmd_info);
-
-				memory.execute_commands(cmd_array, 0, cmd_array.size() - 1);
-
-				return memory.Objects[memory.objectNumber].Class.Methods[methodId].returnValue;
-			}
-
-			else if (lBracket != NOT_FOUND && itrObj != NOT_FOUND)
-			{
-				SnakeScript::COMMAND_INFO cmd_info;
-
-				std::string methodName = name.substr(itrObj + 1, lBracket);
-				std::string objectName = name.substr(0, itrObj);
-				methodName.pop_back();
-				methodName.pop_back();
-
-				int methodId = -1;
-
-				cmd_info.s1 = objectName;
-				cmd_info.s2 = methodName;
 
 				int start = lBracket + 1;
 				std::string toPush;
@@ -711,6 +669,7 @@ public:
 					}
 				}
 
+
 				for (auto i = 0; i < memory.Objects[memory.objectNumber].Class.Methods.size(); i++)
 				{
 					if (methodName == memory.Objects[memory.objectNumber].Class.Methods[i].name)
@@ -725,9 +684,93 @@ public:
 
 				std::vector<COMMAND_INFO> cmd_array;
 
+				cmd_info.s2 = methodName;
 
+				cmd_info.Type = CMD_UNKNOWN;
+				cmd_array.push_back(cmd_info);
 				cmd_info.Type = CMD_CALLMETHOD;
 				cmd_array.push_back(cmd_info);
+				cmd_info.Type = CMD_UNKNOWN;
+				cmd_array.push_back(cmd_info);
+
+
+				if (!memory.execute_commands(cmd_array, 0, cmd_array.size() - 1))
+					std::cout << memory.err_str << std::endl;
+				else
+					return memory.Objects[memory.objectNumber].Class.Methods[methodId].returnValue;
+			}
+
+			else if (lBracket != NOT_FOUND && itrObj != NOT_FOUND)
+			{
+				SnakeScript::COMMAND_INFO cmd_info;
+
+				std::string methodName = name.substr(itrObj + 1, lBracket-2);
+				std::string objectName = name.substr(0, itrObj);
+				methodName.pop_back();
+				methodName.pop_back();
+
+				int methodId = -1;
+				int objectId = -1;
+
+				int start = lBracket + 1;
+				std::string toPush;
+
+				for (auto i = start; i < name.length(); i++)
+				{
+					toPush.push_back(name[i]);
+
+					if (name[i] == ',')
+					{
+						toPush.pop_back();
+						cmd_info.procArguments.push_back(toPush);
+						toPush.clear();
+					}
+					else if (name[i] == ')')
+					{
+						toPush.pop_back();
+						cmd_info.procArguments.push_back(toPush);
+						toPush.clear();
+						break;
+					}
+				}
+
+				for (auto i = 0; i < memory.Objects.size(); i++)
+				{
+					if (memory.Objects[i].objectName == objectName)
+					{
+						objectId = i;
+						break;
+					}
+				}
+
+				if (objectId < 0)
+					throw Variable_not_found();
+
+				for (auto i = 0; i < memory.Objects[objectId].Class.Methods.size(); i++)
+				{
+					if (methodName == memory.Objects[objectId].Class.Methods[i].name)
+					{
+						methodId = i;
+						break;
+					}
+				}
+
+				if (methodId == -1)
+					throw Variable_not_found();
+
+				std::vector<COMMAND_INFO> cmd_array;
+
+				cmd_info.s1 = objectName;
+				cmd_info.s2 = methodName;
+
+
+				cmd_info.Type = CMD_UNKNOWN;
+				cmd_array.push_back(cmd_info);
+				cmd_info.Type = CMD_CALLMETHOD;
+				cmd_array.push_back(cmd_info);
+				cmd_info.Type = CMD_UNKNOWN;
+				cmd_array.push_back(cmd_info);
+				
 
 				if (!memory.execute_commands(cmd_array, 0, cmd_array.size() - 1))
 					std::cout << memory.err_str << std::endl;

@@ -1,8 +1,31 @@
 
-var zmienna
+class TypicalClass
+{
 
-zmienna = 2 + 2
+	var field
+	var otherField
+	
+	
+	default
+	{
+		field = 20
+		otherField = 60
+	}
+	
+	
+public:
 
-Write zmienna/2
-Write "Na pewno dziala"
 
+	def get_field
+	{
+		return {this.field}
+	}
+	
+	def get_otherField 
+	{
+		return {this.otherField}
+	}
+	
+
+
+};

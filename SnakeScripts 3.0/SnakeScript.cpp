@@ -1677,7 +1677,6 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 					return false;
 				}
 
-
 				if (cmd_array[i].procArguments.size() != Objects[objID].Class.Methods[metID].CPP_BODY[0].howMuchArgc)
 				{
 					err_str = "Error! Metoda nie przyjmuje " + std::to_string(cmd_array[i].procArguments.size()) + " argumentow, a " + std::to_string(Objects[objID].Class.Methods[metID].CPP_BODY[0].howMuchArgc);
