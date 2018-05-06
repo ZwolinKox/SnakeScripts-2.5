@@ -23,6 +23,9 @@ class cpp
 	
 };
 
+
+
+
 Object cpp = cpp
 
 

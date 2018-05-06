@@ -91,6 +91,7 @@ bool SnakeScript::loadStdLibs()
 
 	}
 
+	return true;
 }
 
 bool SnakeScript::run()
@@ -763,8 +764,9 @@ int SnakeScript::get_object_id(std::string name)
 		if (Objects[i].objectName == name)
 			return i;
 
-		return -1;
 	}
+
+	return -1;
 }
 
 void SnakeScript::runThread()
@@ -872,6 +874,8 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 	static bool isLambda{ false };
 	bool isLambaNoStatic{ false };
 	static int lambdaLocalVariables{ 0 };
+
+	Block block(this);
 
 	for (int i = start; i <= stop; ++i)
 	{
@@ -1368,6 +1372,11 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 			}
 				
 
+		}	break;
+
+		case CMD_CREATE_BLOCK:
+		{
+			block.addBlockVariable(cmd_array[i].s1, cmd_array[i].n1);
 		}	break;
 		
 		case CMD_CREATE_ARRAY:
@@ -2797,7 +2806,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 	} // g³ówna pêtla for 
 
-
+	return true;
 }
 
 bool SnakeScript::checkVarName(std::string varName)
@@ -3691,6 +3700,33 @@ bool SnakeScript::parse()
 			else
 				cmd_info.n1 = 0;
 
+		}
+	
+		else if (cword == "block")
+		{
+			cmd_info.Type = CMD_CREATE_BLOCK;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa zmiennej blokowej!";
+				return false;
+			}
+
+			cmd_info.s1 = cword;
+			
+
+			if (get_word("="))
+			{
+				if (!get_int())
+				{
+					err_str = "Error! Spodziewana wartoœæ inicjalizacyjna!";
+					return false;
+				}
+
+				cmd_info.n1 = param;
+			}
+			else
+				cmd_info.n1 = 0;
 		}
 		
 		else if (cword == "delete")

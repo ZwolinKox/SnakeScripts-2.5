@@ -73,6 +73,7 @@ class SnakeScript
 		CMD_DELETE_ARRAY, //
 		CMD_CREATE_OBJECT, //
 		CMD_CREATE_ARRAY,//
+		CMD_CREATE_BLOCK,
 		CMD_RUN_THREAD,
 		CMD_CALLMETHOD,//
 		CMD_IF,//
@@ -255,6 +256,62 @@ class SnakeScript
 
 	std::string get_script_name();
 	bool parse();
+
+	class Block
+	{
+		SnakeScript *skrypt = nullptr;
+		int block_number{ 0 };
+		std::vector<std::string> blockVariablesName;
+
+	public:
+
+		Block(SnakeScript *_skrypt)
+		{
+			skrypt = _skrypt;
+		}
+
+		void addBlockVariable(std::string name, int value)
+		{
+			VARIABLE var;
+			var.name = name;
+			var.value = value;
+			skrypt->LocalVariables.push(var);
+			block_number++; 
+			blockVariablesName.push_back(name);
+		}
+
+		~Block()
+		{
+			std::stack<VARIABLE> tmp;
+			while (block_number > 0)
+			{
+				bool flag{ false };
+
+				for (auto i = 0; i < blockVariablesName.size(); i++)
+				{
+					if (blockVariablesName[i] == skrypt->LocalVariables.top().name)
+					{
+						flag = true;
+						break;
+					}
+				}
+
+				if (!flag)
+				{
+					tmp.push(skrypt->LocalVariables.top());
+				}
+
+				skrypt->LocalVariables.pop();
+				block_number--;
+			}
+
+			while (!tmp.empty())
+			{
+				skrypt->LocalVariables.push(tmp.top());
+				tmp.pop();
+			}
+		}
+	};
 
 public:
 
@@ -545,7 +602,11 @@ public:
 			case '/': return left->eval(memory) / right->eval(memory);	break;
 			case '%': return left->eval(memory) % right->eval(memory);	break;
 			}
+
+			throw Not_parsed();
 		}
+
+	
 
 		virtual ~Binary_operator()
 		{
