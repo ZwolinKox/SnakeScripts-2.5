@@ -1,80 +1,10 @@
-//Kiedy wywołujemy procedurę/metodę normalnie wygląda to tak:
+string evalString
 
-//obj.metoda(10, 20, 30)
-
-//Ale jak robimy to w obliczeniach matematycznych lub Write/Print wygląda to tak:
-
-//obj.metoda(10,20,30) WAŻNE!!!!
-
-class TypicalClass
+while true
 {
-
-	var field
-	var otherField
-	
-	
-	default
-	{
-		field = 20
-		otherField = 60
-	}
-	
-	
-public:
-
-	def power (x, y)
-	{
-		let powerValue
-		powerValue = x
-	
-		loop y-1
-		{
-			x = x * powerValue
-		}
-		
-		return {x}
-		
-	}
-	
-	def howMuchDigits (x)
-	{
-		let howMuch = 1
-	
-		while x > 1
-		{
-			howMuch = howMuch + 1
-			x = x / 10
-		}
-		
-		return {howMuch}
-	}
-
-	def get_field
-	{
-		return {this.field}
-	}
-	
-	def get_otherField 
-	{
-		return {this.otherField}
-	}
-
-};
-
-def proceduhka
-{
-	block xd = 90
-	
-	if 0 == 0
-	{
-		block xdd = 99
-		Write xd
-		Write xdd
-	}
-	
+	Print ">>> "
+	Reads evalString
+	eval evalString
 }
 
-var zmienna
 
-proceduhka()
-proceduhka()

@@ -1,6 +1,12 @@
 #include "stdafx.h"
 #include "SnakeScript.h"
 
+int isset(SnakeScript *skrypt)
+{
+	std::cout << "XDDD";
+	//return skrypt->CPP_ARGC[0].value * 2;
+	return 20;
+}
 
 SnakeScript::SnakeScript(std::string fileName)
 	: scriptName(fileName)
@@ -12,6 +18,9 @@ SnakeScript::SnakeScript(std::string fileName)
 	}
 
 }
+
+SnakeScript::SnakeScript(SnakeScript::SCRIPT_TYPE)
+	:scriptName("eval") {};
 
 std::string SnakeScript::get_script_name()
 {
@@ -167,6 +176,7 @@ bool SnakeScript::run()
 		return false;
 	}
 }
+
 
 SnakeScript::~SnakeScript()
 {
@@ -852,8 +862,19 @@ bool SnakeScript::is_true(int nVarValue, EOpType OpType, int nValue)
 	return false;
 }
 
+bool SnakeScript::eval(std::string value)
+{
+	bufor = value;
+
+	if (!parse())
+		return false;
+}
+
 bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int start, int stop)
 {
+
+	//DO USUNIÊCIA w wersji 3.x
+	//xxx
 	static int procNestingLvl;
 
 	static bool isBreak{ false };
@@ -874,6 +895,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 	static bool isLambda{ false };
 	bool isLambaNoStatic{ false };
 	static int lambdaLocalVariables{ 0 };
+	//xxx
 
 	Block block(this);
 
@@ -1075,6 +1097,29 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				}
 			
 			
+
+		}	break;
+
+		case CMD_READS:
+		{
+			int matchingString = -1;
+
+			for (size_t j = 0; j < Strings.size(); j++)
+			{
+				if (Strings[j].name == cmd_array[i].s1)
+				{
+					matchingString = j;
+					break;
+				}
+			}
+
+			if (matchingString < 0)
+			{
+				err_str = "Error! Nie ma zmiennej " + matchingString;
+				return false;
+			}
+
+			std::getline(cin, Strings[matchingString].value);
 
 		}	break;
 
@@ -1376,6 +1421,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 		case CMD_CREATE_BLOCK:
 		{
+			blockVariablesN++;
 			block.addBlockVariable(cmd_array[i].s1, cmd_array[i].n1);
 		}	break;
 		
@@ -1460,6 +1506,9 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				return false;
 			}
 
+			block.stackBlockVariable();
+
+
 			if (!Procs[procId].Arguments.empty())
 			{
 				std::stack<VARIABLE> arg_tmp;
@@ -1488,6 +1537,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 					arg_tmp.pop();
 				}
 			}
+			
 
 			if (isMethod)
 			{
@@ -1590,6 +1640,65 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				isProc = false;
 			}
 
+			block.unStackBlockVariable();
+
+		}	break;
+
+		case CMD_EXIT:
+		{
+			exit(0);
+		}	break;
+
+		case CMD_EVAL:
+		{
+			int matchingString{ -1 };
+			std::string evalString;
+
+			if (cmd_array[i].s3 != "STRING")
+			{
+				for (size_t j = 0; j < Strings.size(); j++)
+				{
+					if (Strings[j].name == cmd_array[i].s1)
+					{
+						matchingString = j;
+						evalString = Strings[j].value;
+						break;
+					}
+				}
+
+				if (matchingString < 0)
+				{
+					err_str = "Error! Nie ma zmiennej " + cmd_array[i].s1;
+					return false;
+				}
+			}
+			else
+				evalString = cmd_array[i].s1;
+
+			SnakeScript skrypt{EVAL_SCRIPT};
+			
+			if (!skrypt.eval(evalString))
+			{
+				err_str = skrypt.err_str;
+				return false;
+			}
+				
+
+			COMMAND_INFO cmd;
+
+			cmd.Type = CMD_UNKNOWN;
+
+			skrypt.Commands.push_back(cmd);
+			
+			if (skrypt.Commands.size() > 1)
+			{
+				if (!execute_commands(skrypt.Commands, 0, skrypt.Commands.size() - 1))
+				{
+					err_str = skrypt.err_str;
+					return false;
+				}
+			}
+
 		}	break;
 
 		case CMD_YIELD:
@@ -1641,6 +1750,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 			int matchingMethod = -1;
 			string methodName = cmd_array[i].s2;
 
+			block.stackBlockVariable();
 
 			if (cmd_array[i].s1 == "cpp")
 			{
@@ -1710,10 +1820,9 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 					}
 
 					lastReturn = Objects[objID].Class.Methods[metID].CPP_BODY[0].body(this);
+					Objects[objID].Class.Methods[metID].returnValue = lastReturn;
 
 					CPP_ARGC.clear();
-
-					std::cout << lastReturn << std::endl;
 				}
 				else
 				{
@@ -1958,6 +2067,8 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 				isMethod = false;
 			}
+
+			block.unStackBlockVariable();
 
 		}	break;
 
@@ -4281,6 +4392,41 @@ bool SnakeScript::parse()
 			cmd_info.nNestingLevel = ++nCurNestingLevel;
 		}
 
+		else if (cword == "eval")
+		{
+			cmd_info.Type = CMD_EVAL;
+			cmd_info.s3 = "STRING";
+
+			if (!get_string())
+			{
+				if (!get_token())
+				{
+					err_str = "Error! Spodziewana wartoœæ po 'eval'";
+					return false;
+				}
+				
+				cmd_info.s3 = "variable";
+			}
+			
+			cmd_info.s1 = cword;
+		}
+
+		else if (cword == "Reads")
+		{
+			cmd_info.Type = CMD_READS;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa stringa po 'Reads'";
+				return false;
+			}
+
+			cmd_info.s1 = cword;
+		}
+
+		else if (cword == "Exit")
+			cmd_info.Type = CMD_EXIT;
+
 		else if (cword == "return")
 		{
 			if (!isProc && !isMethod && !isYield && !isLambda)
@@ -4359,15 +4505,15 @@ bool SnakeScript::parse()
 			isAdd = false;
 		}
 
-		else if (cword == "lambda")
+		else if (cword == "lambda" || cword == "=>")
 		{
 			cmd_info.Type = CMD_LAMBDA;
 
-			if (nCurNestingLevel != 0)
+			/*if (nCurNestingLevel != 0)
 			{
 				err_str = "Error! Wyrazenie lambda nie moze byc zagniezdzone!";
 				return false;
-			}
+			}*/
 
 			if (!get_word("{"))
 			{

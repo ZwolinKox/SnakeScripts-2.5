@@ -47,6 +47,11 @@ class SnakeScript
 		OP_LESS_OR_EQUAL
 	};
 
+	enum SCRIPT_TYPE
+	{
+		EVAL_SCRIPT
+	};
+
 	enum ENCAPSULATION
 	{
 		ENCAPSULATION_UNKNOWN,
@@ -81,6 +86,8 @@ class SnakeScript
 		CMD_ELSE,//
 		CMD_SYSTEM, //
 		CMD_READ,//
+		CMD_READS,//
+		CMD_EXIT,
 		CMD_WAIT,
 		CMD_RETURN,//
 		CMD_FOR,//
@@ -95,6 +102,7 @@ class SnakeScript
 		CMD_ERASE,//
 		CMD_ADD_NEW_METHOD,//
 		CMD_LAMBDA, //
+		CMD_EVAL,
 		CMD_THROW,
 		CMD_TESTEQ,
 		CMD_ADD_STRING, 
@@ -223,6 +231,7 @@ class SnakeScript
 	std::string scriptName;
 	int lastReturn{ 0 };
 
+	SnakeScript(SCRIPT_TYPE);
 	//Metody pomocnicze
 	bool execute_commands(std::vector<COMMAND_INFO>& cmd_array, int start, int stop);
 	bool get_token();
@@ -253,15 +262,23 @@ class SnakeScript
 	bool is_true(int nVarValue, EOpType OpType, int nValue);
 	bool loadStdLibs();
 	std::vector<std::string> get_proc_arguments();
+	bool eval(std::string);
 
 	std::string get_script_name();
 	bool parse();
 
+	int blockVariablesN{ 0 };
+
+	int allBlockCounter{ 0 };
+
+	//Old block
+	/*
 	class Block
 	{
 		SnakeScript *skrypt = nullptr;
 		int block_number{ 0 };
 		std::vector<std::string> blockVariablesName;
+		std::stack<VARIABLE> stack;
 
 	public:
 
@@ -278,6 +295,52 @@ class SnakeScript
 			skrypt->LocalVariables.push(var);
 			block_number++; 
 			blockVariablesName.push_back(name);
+		}
+
+		void stackBlockVariable()
+		{
+			std::stack<VARIABLE> tmp;
+			while (block_number > 0)
+			{
+				bool flag{ false };
+
+				for (auto i = 0; i < blockVariablesName.size(); i++)
+				{
+					if (blockVariablesName[i] == skrypt->LocalVariables.top().name)
+					{
+						flag = true;
+						break;
+					}
+				}
+
+				if (!flag)
+				{
+					tmp.push(skrypt->LocalVariables.top());
+				}
+				else
+				{
+					stack.push(skrypt->LocalVariables.top());
+					block_number--;
+				}
+
+				skrypt->LocalVariables.pop();
+			}
+
+			while (!tmp.empty())
+			{
+				skrypt->LocalVariables.push(tmp.top());
+				tmp.pop();
+			}
+		}
+
+		void unStackBlockVariable()
+		{
+			while (!stack.empty())
+			{
+				skrypt->LocalVariables.push(stack.top());
+				stack.pop();
+				block_number++;
+			}
 		}
 
 		~Block()
@@ -312,6 +375,90 @@ class SnakeScript
 			}
 		}
 	};
+	*/
+
+class Block
+{
+	SnakeScript *skrypt = nullptr;
+	int block_number{ 0 };
+	std::vector<std::string> blockVariablesName;
+	std::stack<VARIABLE> stack;
+
+public:
+
+	Block(SnakeScript *_skrypt)
+	{
+		skrypt = _skrypt;
+	}
+
+	void addBlockVariable(std::string name, int value)
+	{
+		VARIABLE var;
+		var.name = name;
+		var.value = value;
+		skrypt->LocalVariables.push(var);
+		block_number++;
+		blockVariablesName.push_back(name);
+	}
+
+	void stackBlockVariable()
+	{	
+		while (!skrypt->LocalVariables.empty())
+		{
+			stack.push(skrypt->LocalVariables.top());
+			skrypt->LocalVariables.pop();
+		}
+	}
+
+	void unStackBlockVariable()
+	{
+		while (!stack.empty())
+		{
+			skrypt->LocalVariables.push(stack.top());
+			stack.pop();
+		}
+	}
+
+	~Block()
+	{
+		std::stack<VARIABLE> tmp;
+		while (block_number > 0)
+		{
+			if (skrypt->LocalVariables.empty())
+				break;
+
+			bool flag{ false };
+
+
+			for (auto i = 0; i < blockVariablesName.size(); i++)
+			{
+				if (blockVariablesName[i] == skrypt->LocalVariables.top().name)
+				{
+					flag = true;
+					break;
+				}
+			}
+
+
+			if (!flag)
+			{
+				tmp.push(skrypt->LocalVariables.top());
+			}
+			
+			block_number--;
+
+			skrypt->LocalVariables.pop();
+
+		}
+
+		while (!tmp.empty())
+		{
+			skrypt->LocalVariables.push(tmp.top());
+			tmp.pop();
+		}
+	}
+};
+
 
 public:
 
