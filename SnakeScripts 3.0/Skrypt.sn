@@ -1,10 +1,11 @@
 string evalString
 
+use Write as echo
+
 while true
 {
-	Print ">>> "
+	Print ">>>"
 	Reads evalString
 	eval evalString
 }
-
 

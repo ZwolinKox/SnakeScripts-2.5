@@ -1676,6 +1676,7 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 				evalString = cmd_array[i].s1;
 
 			SnakeScript skrypt{EVAL_SCRIPT};
+			skrypt.PreprocDefinitions = PreprocDefinitions;
 			
 			if (!skrypt.eval(evalString))
 			{
@@ -2954,7 +2955,10 @@ int SnakeScript::get_var_id(std::string varName)
 
 bool SnakeScript::get_string()
 {
+
 	const char* CHAR_QUOTE = "\"";
+
+
 	int pos2;
 
 	pos = bufor.find_first_not_of(WS_SET, pos);
@@ -2963,6 +2967,12 @@ bool SnakeScript::get_string()
 		return false;
 
 	cword = bufor.substr(pos, 1);
+
+	auto _pos1 = cword.find_first_of("\"");
+	auto _pos2 = cword.find_first_of("'");
+
+	if (_pos2 < _pos1)
+		CHAR_QUOTE = "'";
 
 	if (cword != CHAR_QUOTE)
 		return false;
@@ -3082,6 +3092,16 @@ std::vector<std::string> SnakeScript::get_proc_arguments()
 	return tmp;
 }
 
+void SnakeScript::preproc()
+{
+	for (auto j = 0; j < PreprocDefinitions.size(); j++)
+	{
+		if (cword == PreprocDefinitions[j].definition)
+			cword = PreprocDefinitions[j].orginal;
+	}
+
+	
+}
 
 bool SnakeScript::parse()
 {
@@ -3109,6 +3129,8 @@ bool SnakeScript::parse()
 
 		if (!get_token())
 			return true;
+
+		preproc();
 
 		if (cword.length() > 1)
 		{
@@ -3192,6 +3214,35 @@ bool SnakeScript::parse()
 			bufor = bufor_lib;
 			pos = pos_lib;
 
+		}
+
+		else if (cword == "use")
+		{
+			PREPROC_DEF predef;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa typu przy nadawaniu aliasu!";
+				return false;
+			}
+
+			predef.orginal = cword;
+
+			if (!get_word("as"))
+			{
+				err_str = "Error! Spodziewane s³owo 'as'";
+				return false;
+			}
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana nazwa aliasu";
+				return false;
+			}
+
+			predef.definition = cword;
+
+			PreprocDefinitions.push_back(predef);
 		}
 
 		else if (cword == "class" || cword == "final" || cword == "abstract" || cword == "interface" || cword == "struct")

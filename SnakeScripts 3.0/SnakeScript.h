@@ -208,6 +208,12 @@ class SnakeScript
 		int returnValue;
 	};
 
+	struct PREPROC_DEF
+	{
+		std::string orginal;
+		std::string definition;
+	};
+
 	std::vector<COMMAND_INFO> Commands;
 	std::vector<VARIABLE> Variables;
 	std::stack<VARIABLE> LocalVariables;
@@ -218,6 +224,7 @@ class SnakeScript
 	std::vector<PROC> Procs;
 	std::vector<THREAD> Threads;
 	std::vector<STRING> Strings;
+	std::vector<PREPROC_DEF> PreprocDefinitions;
 
 	std::vector<std::function<void()>> CPP_FUNCTIONS;
 
@@ -263,6 +270,7 @@ class SnakeScript
 	bool loadStdLibs();
 	std::vector<std::string> get_proc_arguments();
 	bool eval(std::string);
+	void preproc();
 
 	std::string get_script_name();
 	bool parse();
