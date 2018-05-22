@@ -1177,6 +1177,80 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 
 		} break;
 
+		case CMD_FILE_LOAD_ALL:
+		case CMD_FILE_LOAD:
+		{
+			std::string	saveString;
+			std::string fileName;
+
+			if (cmd_array[i].s3 != "STRING")
+			{
+				int matchingString{ -1 };
+
+				for (size_t j = 0; j < Strings.size(); j++)
+				{
+					if (Strings[j].name == cmd_array[i].s1)
+					{
+						matchingString = j;
+						break;
+					}
+				}
+
+
+				if (matchingString < 0)
+				{
+					err_str = "Error! Nie ma zmiennej " + cmd_array[i].s1;
+					return false;
+				}
+
+				fileName = Strings[matchingString].value;
+			}
+			else
+				fileName = cmd_array[i].s1;
+
+			int matchingString{ -1 };
+
+			for (size_t j = 0; j < Strings.size(); j++)
+			{
+				if (Strings[j].name == cmd_array[i].s2)
+				{
+					matchingString = j;
+					break;
+				}
+			}
+
+			if (matchingString < 0)
+			{
+				err_str = "Error! Nie ma zmiennej " + cmd_array[i].s2;
+				return false;
+			}
+
+			std::fstream file;
+
+			file.open(fileName, std::ios::in);
+
+			if(cmd_array[i].Type == CMD_FILE_LOAD)
+				file >> Strings[matchingString].value;
+			else
+			{	
+				Strings[matchingString].value.clear();
+
+				while (!file.eof())
+				{
+					while (!file.eof())
+					{
+						std::string buff;
+
+						std::getline(file, buff);
+						Strings[matchingString].value += buff;
+					}
+				}
+			}
+
+			file.close();
+
+		}	break;
+
 		case CMD_READS:
 		{
 			int matchingString = -1;
@@ -4698,6 +4772,8 @@ bool SnakeScript::parse()
 				cmd_info.Type = CMD_FILE_SAVE;
 			else if (cword == ">")
 				cmd_info.Type = CMD_FILE_TRUNCATE;
+			else if (cword == "<")
+				cmd_info.Type = CMD_FILE_LOAD_ALL;
 			else if (cword == "<<")
 				cmd_info.Type = CMD_FILE_LOAD;
 			else

@@ -110,7 +110,8 @@ class SnakeScript
 		CMD_ADD_STRING, 
 		CMD_FILE_SAVE,
 		CMD_FILE_LOAD,
-		CMD_FILE_TRUNCATE
+		CMD_FILE_TRUNCATE,
+		CMD_FILE_LOAD_ALL
 	};
 
 	//Struktury

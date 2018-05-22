@@ -1,6 +1,14 @@
 string evalString
+string ok
+string okk
 
 use Write as echo
+
+file ok < "XD"
+file ok < "XD"
+file okk << "XD"
+
+
 
 while true
 {
