@@ -1,12 +1,6 @@
 #include "stdafx.h"
 #include "SnakeScript.h"
 
-int isset(SnakeScript *skrypt)
-{
-	std::cout << "XDDD";
-	//return skrypt->CPP_ARGC[0].value * 2;
-	return 20;
-}
 
 SnakeScript::SnakeScript(std::string fileName)
 	: scriptName(fileName)
@@ -29,6 +23,10 @@ std::string SnakeScript::get_script_name()
 
 bool SnakeScript::loadStdLibs()
 {
+	//CPP
+
+
+	//SNS
 	int libsNum = 1;
 
 	for(int i = 0; i < STD_LIBS.size(); i++)
@@ -99,6 +97,10 @@ bool SnakeScript::loadStdLibs()
 		pos = pos_lib;
 
 	}
+
+	registerFunc([](SnakeScript* skrypt) {return rand() % (skrypt->CPP_ARGC[1].value - skrypt->CPP_ARGC[0].value + 1) + skrypt->CPP_ARGC[0].value; },
+		"random",
+		2);
 
 	return true;
 }
@@ -1099,6 +1101,81 @@ bool SnakeScript::execute_commands(std::vector<COMMAND_INFO>& cmd_array, int sta
 			
 
 		}	break;
+
+		case CMD_FILE_SAVE:
+		case CMD_FILE_TRUNCATE:
+		{
+			std::string	saveString;
+			std::string fileName;
+
+			if (cmd_array[i].s3 != "STRING")
+			{
+
+				int matchingString{ -1 };
+
+				for (size_t j = 0; j < Strings.size(); j++)
+				{
+					if (Strings[j].name == cmd_array[i].s1)
+					{
+						matchingString = j;
+						break;
+					}
+				}
+
+
+				if (matchingString < 0)
+				{
+					err_str = "Error! Nie ma zmiennej " + cmd_array[i].s1;
+					return false;
+				}
+
+				fileName = Strings[matchingString].value;
+			}
+			else
+				fileName = cmd_array[i].s1;
+
+
+
+			int matchingString{ -1 };
+
+			for (size_t j = 0; j < Strings.size(); j++)
+			{
+				if (Strings[j].name == cmd_array[i].s2)
+				{
+					matchingString = j;
+					break;
+				}
+			}
+
+
+
+			if (matchingString > 0)
+				saveString = Strings[matchingString].value;
+			else
+			{
+				Parser parser{ cmd_array[i].s2 };
+				Expression* expr = parser.parse_Expression();
+
+				saveString = std::to_string(expr->eval(*this));
+			}
+
+
+			std::fstream file;
+
+			if (cmd_array[i].Type == CMD_FILE_SAVE)
+			{
+				file.open(fileName, std::ios::app);
+			}
+			else
+				file.open(fileName, std::ios::out | std::ios::trunc);
+
+
+			file << saveString+'\n';
+
+			file.close();
+
+
+		} break;
 
 		case CMD_READS:
 		{
@@ -2955,9 +3032,7 @@ int SnakeScript::get_var_id(std::string varName)
 
 bool SnakeScript::get_string()
 {
-
 	const char* CHAR_QUOTE = "\"";
-
 
 	int pos2;
 
@@ -4599,6 +4674,53 @@ bool SnakeScript::parse()
 
 				cmd_info.s2 = cword;
 			}
+		}
+
+		else if (cword == "file")
+		{
+			cmd_info.s3 = "n";
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewana zmienna zapisywana do pliku!";
+				return false;
+			}
+
+			cmd_info.s2 = cword;
+
+			if (!get_token())
+			{
+				err_str = "Error! Spodziewany oprator strumienia!";
+				return false;
+			}
+
+			if (cword == ">>")
+				cmd_info.Type = CMD_FILE_SAVE;
+			else if (cword == ">")
+				cmd_info.Type = CMD_FILE_TRUNCATE;
+			else if (cword == "<<")
+				cmd_info.Type = CMD_FILE_LOAD;
+			else
+			{
+				err_str = "Error! Nie ma operatora strumienia: '" + cword + "'!";
+				return false;
+			}
+
+			if (!get_string())
+			{
+				if (!get_token())
+				{
+					err_str = "Error! Spodziewana nazwa pliku!";
+					return false;
+				}
+			}
+			else
+				cmd_info.s3 = "STRING";
+
+
+			cmd_info.s1 = cword;
+
+			
 		}
 
 		else if ((isProc || isMethod || isAdd) && cword == "yield")

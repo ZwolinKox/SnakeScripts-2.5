@@ -7,8 +7,10 @@
 #include <thread>
 #include <queue>
 #include <Windows.h>
+#include <map>
 #include <array>
 #include <functional>
+#include <fstream>
 
 #define NOT_FOUND std::string::npos 
 #define POS_END std::string::npos
@@ -106,6 +108,9 @@ class SnakeScript
 		CMD_THROW,
 		CMD_TESTEQ,
 		CMD_ADD_STRING, 
+		CMD_FILE_SAVE,
+		CMD_FILE_LOAD,
+		CMD_FILE_TRUNCATE
 	};
 
 	//Struktury
@@ -225,6 +230,8 @@ class SnakeScript
 	std::vector<THREAD> Threads;
 	std::vector<STRING> Strings;
 	std::vector<PREPROC_DEF> PreprocDefinitions;
+
+
 
 	std::vector<std::function<void()>> CPP_FUNCTIONS;
 
@@ -786,63 +793,9 @@ public:
 			auto itrObj = name.find('.');
 			auto findThis = name.find("this");
 			auto lBracket = name.find_first_of("(");
-			auto isRandom = name.find("random");
 
-			if (isRandom != NOT_FOUND)
-			{
-				auto lBr = name.find_first_of("(");
-				auto floor = name.find_first_of('_');
 
-				std::string rand1;
-				int rand1Val;
-
-				std::string rand2;
-				int rand2Val;
-
-				rand1 = name.substr(lBr + 1);
-				rand2 = name.substr(floor+1);
-
-				for (auto i = rand1.length() - 1; i != 0; i--)
-				{
-					if (rand1[i] == '_')
-					{
-						rand1.pop_back();
-						break;
-					}
-						
-
-					rand1.pop_back();
-				}
-
-				rand2.pop_back();
-
-				Parser firstParser{ rand1 };
-				Parser secondParser{ rand2 };
-
-				Expression* expr = firstParser.parse_Expression();
-
-				rand1Val = expr->eval(memory);
-
-				expr = secondParser.parse_Expression();
-				
-				rand2Val = expr->eval(memory);
-
-				if (rand2Val > rand1Val)
-				{
-					int tmp = rand2Val;
-
-					rand2Val = rand1Val;
-					rand1Val = tmp;
-
-					return rand() % (rand2Val - rand1Val) + rand1Val;
-				}
-				else if (rand2Val == rand1Val)
-				{
-					return rand() % rand2Val;
-				}
-			}
-
-			else if (isLength != NOT_FOUND)
+			if (isLength != NOT_FOUND)
 			{
 				std::string arrayName = name.substr(0, isLength);
 

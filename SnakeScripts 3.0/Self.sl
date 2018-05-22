@@ -16,6 +16,11 @@ public:
 	
 };
 
+class string
+{
+	
+};
+
 
 //Tu wywołujemy wszystkie funkcje z C++
 class cpp
