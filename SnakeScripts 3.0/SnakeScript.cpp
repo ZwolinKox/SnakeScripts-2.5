@@ -177,6 +177,11 @@ bool SnakeScript::run()
 		cout << "Error! Zmienna jest prywatna - blad parsera matematycznego!";
 		return false;
 	}
+	catch (std::invalid_argument)
+	{
+		cout << "Error! Niepoprawna zamiana ciagu znakow na liczbe!";
+		return false;
+	}
 }
 
 

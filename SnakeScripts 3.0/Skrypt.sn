@@ -4,11 +4,12 @@ string okk
 
 use Write as echo
 
-file ok < "XD"
-file ok < "XD"
-file okk << "XD"
+Print "Podaj liczbe: "
+Reads ok
 
+var xd = 9
 
+xd = ok.toInt
 
 while true
 {

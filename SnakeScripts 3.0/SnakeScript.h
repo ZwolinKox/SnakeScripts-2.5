@@ -794,6 +794,7 @@ public:
 			auto itrObj = name.find('.');
 			auto findThis = name.find("this");
 			auto lBracket = name.find_first_of("(");
+			auto toString = name.find(".toInt");
 
 
 			if (isLength != NOT_FOUND)
@@ -804,6 +805,17 @@ public:
 				{
 					if (memory.Arrays[i][0].name == arrayName)
 						return memory.Arrays[i].size();
+				}
+			}
+
+			else if (toString != NOT_FOUND)
+			{
+				std::string stringName = name.substr(0, toString);
+
+				for (auto i = 0; i < memory.Strings.size(); i++)
+				{
+					if (memory.Strings[i].name == stringName)
+							return std::stoi(memory.Strings[i].value);
 				}
 			}
 
